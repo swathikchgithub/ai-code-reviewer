@@ -1,18 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { 
-  Play, 
-  Code2, 
-  AlertTriangle, 
-  Sparkles, 
-  Check, 
-  Copy, 
+import {
+  Play,
+  PlayCircle,
+  Code2,
+  AlertTriangle,
+  Sparkles,
+  Check,
+  Copy,
   ChevronRight,
   Terminal,
   RefreshCw,
-  Zap
+  Zap,
+  X
 } from 'lucide-react';
 
 import { EXAMPLES, ExamplePreset, ExampleLanguage } from '@/lib/examples';
@@ -48,6 +50,14 @@ interface FixState {
   eli5_explanation?: string;
   loading: boolean;
   copied?: boolean;
+}
+
+interface RunResult {
+  stdout: string;
+  stderr: string;
+  error: string | null;
+  timedOut: boolean;
+  durationMs: number;
 }
 
 const ALL_LANGUAGES: { value: ExampleLanguage; label: string }[] = [
@@ -89,6 +99,17 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [fixes, setFixes] = useState<Record<number, FixState>>({});
 
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [pyodideWarm, setPyodideWarm] = useState(false);
+  const pyWorkerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    return () => {
+      pyWorkerRef.current?.terminate();
+    };
+  }, []);
+
   const selectedPreset = EXAMPLES.find(ex => ex.id === selectedExampleId);
   const availableLanguages = selectedPreset
     ? new Set<ExampleLanguage>([
@@ -100,6 +121,7 @@ export default function Home() {
   const handleSelectExample = (id: string) => {
     const found = EXAMPLES.find(ex => ex.id === id);
     if (found) {
+      setRunResult(null);
       setSelectedExampleId(found.id);
       const preferredCode = preferredLanguage === found.language
         ? found.code
@@ -117,6 +139,7 @@ export default function Home() {
   };
 
   const handleLanguageChange = (newLang: string) => {
+    setRunResult(null);
     setLanguage(newLang);
     setPreferredLanguage(newLang as ExampleLanguage);
     if (selectedPreset) {
@@ -125,6 +148,62 @@ export default function Home() {
         : selectedPreset.variants?.[newLang as ExampleLanguage];
       if (variantCode) setCode(variantCode);
     }
+  };
+
+  const handleRunPython = () => {
+    if (running || !code.trim()) return;
+    setRunning(true);
+    setRunResult(null);
+
+    if (!pyWorkerRef.current) {
+      pyWorkerRef.current = new Worker('/pyodide-worker.js', { type: 'module' });
+    }
+    const worker = pyWorkerRef.current;
+
+    // Pyodide's first load fetches several MB of WASM/stdlib over the network;
+    // give that far more headroom than a warm run, which only needs to cover
+    // the reviewed code actually executing (including infinite-loop bugs).
+    const timeoutMs = pyodideWarm ? 8000 : 30000;
+    let settled = false;
+
+    const finish = (result: RunResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      worker.removeEventListener('message', onMessage);
+      setRunning(false);
+      setRunResult(result);
+    };
+
+    const onMessage = (e: MessageEvent) => {
+      setPyodideWarm(true);
+      finish({
+        stdout: e.data.stdout || '',
+        stderr: e.data.stderr || '',
+        error: e.data.error || null,
+        timedOut: false,
+        durationMs: e.data.durationMs || 0,
+      });
+    };
+
+    const timeoutId = setTimeout(() => {
+      // A synchronous infinite loop blocks the worker thread entirely, so it
+      // can't respond to messages — terminate() is the only way out. The next
+      // run gets a fresh worker since this one is now dead.
+      worker.terminate();
+      pyWorkerRef.current = null;
+      setPyodideWarm(false);
+      finish({
+        stdout: '',
+        stderr: '',
+        error: `Execution timed out after ${timeoutMs / 1000}s (possible infinite loop).`,
+        timedOut: true,
+        durationMs: timeoutMs,
+      });
+    }, timeoutMs);
+
+    worker.addEventListener('message', onMessage);
+    worker.postMessage({ code });
   };
 
   const handleReview = async () => {
@@ -321,9 +400,25 @@ export default function Home() {
                   })}
                 </select>
               </div>
+
+              {language === 'python' && (
+                <button
+                  className="fix-button"
+                  onClick={handleRunPython}
+                  disabled={running || !code.trim()}
+                  title="Run this Python code in-browser (Pyodide) and see real output"
+                >
+                  {running ? (
+                    <RefreshCw size={12} className="loading-spinner" style={{ border: 'none', animationDuration: '2s' }} />
+                  ) : (
+                    <PlayCircle size={12} />
+                  )}
+                  <span>{running ? 'Running...' : 'Run'}</span>
+                </button>
+              )}
             </div>
           </div>
-          
+
           <div className="editor-container">
             <Editor
               height="100%"
@@ -341,6 +436,42 @@ export default function Home() {
               }}
             />
           </div>
+
+          {(running || runResult) && (
+            <div className="run-console">
+              <div className="run-console-header">
+                <span>
+                  <Terminal size={12} />
+                  <span>Python Output</span>
+                  {runResult && !runResult.timedOut && (
+                    <span className="run-console-duration">{runResult.durationMs}ms</span>
+                  )}
+                </span>
+                {runResult && (
+                  <button
+                    className="run-console-close"
+                    onClick={() => setRunResult(null)}
+                    title="Clear output"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="run-console-body">
+                {running && (
+                  <span className="run-console-status">
+                    {pyodideWarm ? 'Running…' : 'Loading Python runtime (first run only)…'}
+                  </span>
+                )}
+                {runResult?.stdout && <pre className="run-console-stdout">{runResult.stdout}</pre>}
+                {runResult?.stderr && <pre className="run-console-stderr">{runResult.stderr}</pre>}
+                {runResult?.error && <pre className="run-console-error">{runResult.error}</pre>}
+                {runResult && !runResult.stdout && !runResult.stderr && !runResult.error && (
+                  <span className="run-console-status">Ran with no output.</span>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Right Output Review Panel */}
