@@ -4,7 +4,8 @@ import { z } from 'zod';
 
 const fixSchema = z.object({
   fixed_code: z.string().describe('The complete code snippet that resolves the specified issue. Do not include markdown formatting or backticks in this code content, just the raw code.'),
-  explanation: z.string().describe('A concise explanation (1-2 sentences) of how this fix resolves the issue.')
+  explanation: z.string().describe('A concise explanation (1-2 sentences) of how this fix resolves the issue.'),
+  eli5_explanation: z.string().describe('The same fix explained like the reader is 5 years old: 1-2 short sentences, plain everyday words, no jargon, using a simple real-world analogy instead of technical terms.')
 });
 
 export async function POST(request: Request) {
@@ -43,6 +44,8 @@ Issue description: "${issue.description}" on line ${issue.line} (severity: ${iss
 Explain the fix in an educational, friendly, and supportive way so the developer understands what was changed.`;
         break;
     }
+
+    systemPrompt += `\nAlso provide eli5_explanation: explain the fix as if to a curious 5-year-old, in 1-2 short sentences with a simple everyday analogy and no technical jargon.`;
 
     const promptText = `Language: ${language || 'javascript'}
 Issue Description: ${issue.description}

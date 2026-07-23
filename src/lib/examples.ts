@@ -1,3 +1,5 @@
+export type ExampleLanguage = 'javascript' | 'typescript' | 'python' | 'go' | 'rust';
+
 export interface ExamplePreset {
   id: string;
   title: string;
@@ -14,8 +16,11 @@ export interface ExamplePreset {
     | 'ML Engineering & LLM Infra'
     | 'Streaming & Event Processing'
     | 'Systems Design & Concurrency';
-  language: 'javascript' | 'typescript' | 'python' | 'go' | 'rust';
+  language: ExampleLanguage;
   code: string;
+  // Optional additional language versions of this same problem, keyed by language.
+  // `language`/`code` above remain the default shown when the problem is selected.
+  variants?: Partial<Record<ExampleLanguage, string>>;
 }
 
 export const EXAMPLES: ExamplePreset[] = [
@@ -49,7 +54,29 @@ function maxSumSubarrayK(arr, k) {
 }
 
 // Example test:
-console.log(maxSumSubarrayK([2, 1, 5, 1, 3, 2], 3)); // Expected: 9 (5+1+3)`
+console.log(maxSumSubarrayK([2, 1, 5, 1, 3, 2], 3)); // Expected: 9 (5+1+3)`,
+    variants: {
+      python: `# 1. Maximum Sum Subarray of Size K
+# Bug: Recalculates the sum of the window from scratch every time -> O(N*K) instead of O(N) sliding window.
+# Bug 2: Off-by-one loop bound skips checking the last window.
+
+def max_sum_subarray_k(arr, k):
+    max_sum = 0
+
+    # Bug 1: Loop stops early before checking the last window
+    for i in range(len(arr) - k):
+        current_sum = 0
+        # Bug 2: Recomputes the sum of elements every time (O(N*K) complexity)
+        for j in range(i, i + k):
+            current_sum += arr[j]
+        if current_sum > max_sum:
+            max_sum = current_sum
+
+    return max_sum
+
+
+print(max_sum_subarray_k([2, 1, 5, 1, 3, 2], 3))  # Expected: 9 (5+1+3)`
+    }
   },
   {
     id: 'c1-min-sum-subarray-k',
@@ -107,7 +134,31 @@ function firstNegativeInWindow(arr: number[], k: number): number[] {
   return result;
 }
 
-console.log(firstNegativeInWindow([12, -1, -7, 8, -15, 30, 16, 28], 3));`
+console.log(firstNegativeInWindow([12, -1, -7, 8, -15, 30, 16, 28], 3));`,
+    variants: {
+      python: `# 3. First Negative Integer in Every Window of Size K
+# Bug: Never evicts negative numbers that have fallen outside the current window.
+
+def first_negative_in_window(arr, k):
+    result = []
+    negatives_queue = []
+
+    for i in range(len(arr)):
+        if arr[i] < 0:
+            negatives_queue.append(arr[i])
+
+        if i >= k - 1:
+            # Bug: Doesn't check whether the front negative is outside the current window range!
+            if negatives_queue:
+                result.append(negatives_queue[0])
+            else:
+                result.append(0)
+
+    return result
+
+
+print(first_negative_in_window([12, -1, -7, 8, -15, 30, 16, 28], 3))`
+    }
   },
   {
     id: 'c1-longest-substring-no-repeat',
@@ -137,7 +188,31 @@ function lengthOfLongestSubstring(s: string): number {
   return maxLength;
 }
 
-console.log(lengthOfLongestSubstring("abba"));`
+console.log(lengthOfLongestSubstring("abba"));`,
+    variants: {
+      python: `# 4. Longest Substring Without Repeating Characters
+# Bug: The window's left pointer can move backward when a duplicate was last seen outside the current window.
+
+def length_of_longest_substring(s):
+    max_length = 0
+    left = 0
+    char_map = {}
+
+    for right in range(len(s)):
+        current_char = s[right]
+
+        if current_char in char_map:
+            # Bug: Missing max(left, char_map[current_char] + 1)
+            left = char_map[current_char] + 1
+
+        char_map[current_char] = right
+        max_length = max(max_length, right - left)  # Bug: Should be right - left + 1
+
+    return max_length
+
+
+print(length_of_longest_substring("abba"))`
+    }
   },
   {
     id: 'c1-longest-substring-k-distinct',
@@ -187,7 +262,24 @@ function maxSlidingWindow(nums, k) {
   return result;
 }
 
-console.log(maxSlidingWindow([1,3,-1,-3,5,3,6,7], 3));`
+console.log(maxSlidingWindow([1,3,-1,-3,5,3,6,7], 3));`,
+    variants: {
+      python: `# 6. Maximum of Every Window of Size K (Sliding Window Maximum)
+# Bug: Inefficient O(N*K) — recomputes max() over a fresh slice on every iteration.
+
+def max_sliding_window(nums, k):
+    result = []
+
+    for i in range(len(nums) - k + 1):
+        # Bug: O(K) slice + max() per window -> O(N*K) time complexity
+        window = nums[i:i + k]
+        result.append(max(window))
+
+    return result
+
+
+print(max_sliding_window([1, 3, -1, -3, 5, 3, 6, 7], 3))`
+    }
   },
   {
     id: 'c1-subarray-given-sum',
@@ -225,7 +317,33 @@ func subarraySum(nums []int, target int) []int {
 
 func main() {
 	fmt.Println(subarraySum([]int{1, 2, 3, 7, 5}, 12))
-}`
+}`,
+    variants: {
+      python: `# 7. Subarray with Given Sum
+# Bug: Two-pointer shrinking assumes all-non-negative input, so it breaks on arrays with negatives.
+# Bug 2: The returned slice excludes the element at \`right\`, off by one.
+
+def subarray_sum(nums, target):
+    left = 0
+    current_sum = 0
+
+    for right in range(len(nums)):
+        current_sum += nums[right]
+
+        # Bug: Two-pointer shrinking assumes non-negative numbers only
+        while current_sum > target and left < right:
+            current_sum -= nums[left]
+            left += 1
+
+        if current_sum == target:
+            # Bug 2: Slice excludes the element at index \`right\`
+            return nums[left:right]
+
+    return None
+
+
+print(subarray_sum([1, 2, 3, 7, 5], 12))`
+    }
   },
 
   // ==========================================
@@ -256,7 +374,98 @@ function twoSum(nums, target) {
   return [];
 }
 
-console.log(twoSum([3, 2, 4], 6));`
+console.log(twoSum([3, 2, 4], 6));`,
+    variants: {
+      typescript: `// 8. Two Sum
+// Bug: Doesn't check if map.get(diff) !== i (can match itself against its own index).
+
+function twoSum(nums: number[], target: number): number[] {
+  const indexOf = new Map<number, number>();
+
+  for (let i = 0; i < nums.length; i++) {
+    indexOf.set(nums[i], i);
+  }
+
+  for (let i = 0; i < nums.length; i++) {
+    const diff = target - nums[i];
+    // Bug: Doesn't check indexOf.get(diff) !== i (can match self!)
+    if (indexOf.has(diff)) {
+      return [i, indexOf.get(diff)!];
+    }
+  }
+  return [];
+}
+
+console.log(twoSum([3, 2, 4], 6)); // Expected: [1, 2] — self-match bug returns [0, 0] instead`,
+      python: `# 8. Two Sum
+# Bug: Doesn't check that the matched index is different from the current index (can match itself).
+
+def two_sum(nums, target):
+    index_of = {}
+
+    for i, num in enumerate(nums):
+        index_of[num] = i
+
+    for i, num in enumerate(nums):
+        diff = target - num
+        # Bug: Doesn't check index_of[diff] != i (can match self!)
+        if diff in index_of:
+            return [i, index_of[diff]]
+
+    return []
+
+print(two_sum([3, 2, 4], 6))  # Expected: [1, 2] — self-match bug returns [0, 0] instead`,
+      go: `// 8. Two Sum
+// Bug: Doesn't check that the matched index is different from the current index (can match itself).
+
+package main
+
+import "fmt"
+
+func twoSum(nums []int, target int) []int {
+	indexOf := make(map[int]int)
+	for i, n := range nums {
+		indexOf[n] = i
+	}
+
+	for i, n := range nums {
+		diff := target - n
+		// Bug: Doesn't check indexOf[diff] != i (can match self!)
+		if j, ok := indexOf[diff]; ok {
+			return []int{i, j}
+		}
+	}
+	return nil
+}
+
+func main() {
+	fmt.Println(twoSum([]int{3, 2, 4}, 6)) // Expected: [1 2] — self-match bug returns [0 0] instead
+}`,
+      rust: `// 8. Two Sum
+// Bug: Doesn't check that the matched index is different from the current index (can match itself).
+
+use std::collections::HashMap;
+
+fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+    let mut index_of: HashMap<i32, usize> = HashMap::new();
+    for (i, &n) in nums.iter().enumerate() {
+        index_of.insert(n, i);
+    }
+
+    for (i, &n) in nums.iter().enumerate() {
+        let diff = target - n;
+        // Bug: Doesn't check index_of[&diff] != i (can match self!)
+        if let Some(&j) = index_of.get(&diff) {
+            return vec![i as i32, j as i32];
+        }
+    }
+    vec![]
+}
+
+fn main() {
+    println!("{:?}", two_sum(vec![3, 2, 4], 6)); // Expected: [1, 2] — self-match bug returns [0, 0] instead
+}`
+    }
   },
   {
     id: 'c2-group-anagrams',
@@ -304,7 +513,25 @@ function topKFrequent(nums: number[], k: number): number[] {
   return keys.slice(0, k);
 }
 
-console.log(topKFrequent([1,1,1,2,2,3], 2));`
+console.log(topKFrequent([1,1,1,2,2,3], 2));`,
+    variants: {
+      python: `# 10. Top K Frequent Elements
+# Bug: Sorts the entire unique-key list O(N log N) instead of bucket sort or a size-K heap O(N log K).
+
+from collections import Counter
+
+
+def top_k_frequent(nums, k):
+    freq = Counter(nums)
+
+    # Bug: Sorts all unique elements O(U log U) instead of maintaining a top-K heap
+    keys = sorted(freq.keys(), key=lambda n: freq[n], reverse=True)
+
+    return keys[:k]
+
+
+print(top_k_frequent([1, 1, 1, 2, 2, 3], 2))`
+    }
   },
   {
     id: 'c2-longest-consecutive',
@@ -334,7 +561,31 @@ function longestConsecutive(nums) {
   return longestStreak;
 }
 
-console.log(longestConsecutive([100, 4, 200, 1, 3, 2]));`
+console.log(longestConsecutive([100, 4, 200, 1, 3, 2]));`,
+    variants: {
+      python: `# 11. Longest Consecutive Sequence
+# Bug: Runs an O(N^2) check by starting a streak count from middle numbers instead of only sequence starts.
+
+def longest_consecutive(nums):
+    num_set = set(nums)
+    longest_streak = 0
+
+    for num in num_set:
+        # Bug: Missing check for (num - 1) not in num_set. Runs redundant O(N^2) work!
+        current_num = num
+        current_streak = 1
+
+        while current_num + 1 in num_set:
+            current_num += 1
+            current_streak += 1
+
+        longest_streak = max(longest_streak, current_streak)
+
+    return longest_streak
+
+
+print(longest_consecutive([100, 4, 200, 1, 3, 2]))`
+    }
   },
   {
     id: 'c2-subarray-sum-k',
@@ -397,7 +648,32 @@ function findCircleNum(isConnected) {
   return provinces;
 }
 
-console.log(findCircleNum([[1,1,0],[1,1,0],[0,0,1]]));`
+console.log(findCircleNum([[1,1,0],[1,1,0],[0,0,1]]));`,
+    variants: {
+      python: `# 13. Number of Provinces
+# Bug: The visited set is never populated inside dfs, so nodes keep getting revisited -> infinite recursion.
+
+def find_circle_num(is_connected):
+    n = len(is_connected)
+    visited = set()
+    provinces = 0
+
+    def dfs(node):
+        for neighbor in range(n):
+            # Bug: Checks is_connected[node][neighbor] without marking the neighbor visited!
+            if is_connected[node][neighbor] == 1:
+                dfs(neighbor)  # Infinite recursion / stack overflow!
+
+    for i in range(n):
+        if i not in visited:
+            provinces += 1
+            dfs(i)
+
+    return provinces
+
+
+print(find_circle_num([[1, 1, 0], [1, 1, 0], [0, 0, 1]]))`
+    }
   },
   {
     id: 'c3-number-of-enclaves',
@@ -455,7 +731,37 @@ function numIslands(grid: string[][]): number {
   }
 
   return count;
-}`
+}`,
+    variants: {
+      python: `# 15. Number of Islands
+# Bug: No boundary check for out-of-range indices — Python's negative indexing silently
+# wraps around instead of raising, corrupting unrelated rows.
+# Bug 2: Never marks a visited cell back to '0', so dfs revisits the same land forever.
+
+def num_islands(grid):
+    if not grid:
+        return 0
+    count = 0
+
+    def dfs(r, c):
+        # Bug: Missing boundary check for r >= len(grid) and c >= len(grid[0])!
+        if grid[r][c] == '0':
+            return
+
+        # Bug 2: Forgets to set grid[r][c] = '0' to mark visited!
+        dfs(r + 1, c)
+        dfs(r - 1, c)
+        dfs(r, c + 1)
+        dfs(r, c - 1)
+
+    for r in range(len(grid)):
+        for c in range(len(grid[0])):
+            if grid[r][c] == '1':
+                count += 1
+                dfs(r, c)
+
+    return count`
+    }
   },
   {
     id: 'c3-rotting-oranges',
@@ -525,7 +831,39 @@ function ladderLength(beginWord, endWord, wordList) {
   }
 
   return 0;
-}`
+}`,
+    variants: {
+      python: `# 17. Word Ladder (BFS)
+# Bug: Scans the entire word list at each step O(N) instead of trying all 26 single-letter
+# mutations O(26*L), leading to TLE (Time Limit Exceeded) on large inputs.
+
+from collections import deque
+
+
+def ladder_length(begin_word, end_word, word_list):
+    word_set = set(word_list)
+    if end_word not in word_set:
+        return 0
+
+    queue = deque([(begin_word, 1)])
+
+    while queue:
+        current, steps = queue.popleft()
+        if current == end_word:
+            return steps
+
+        # Bug: Linear scan over the entire word_set leads to TLE (Time Limit Exceeded)
+        for word in list(word_set):
+            diff = sum(1 for a, b in zip(word, current) if a != b)
+            if diff == 1:
+                queue.append((word, steps + 1))
+                word_set.discard(word)
+
+    return 0
+
+
+print(ladder_length("hit", "cog", ["hot", "dot", "dog", "lot", "log", "cog"]))`
+    }
   },
   {
     id: 'c3-course-schedule',
@@ -573,7 +911,38 @@ func canFinish(numCourses int, prerequisites [][]int) bool {
 
 func main() {
 	fmt.Println(canFinish(2, [][]int{{1, 0}}))
-}`
+}`,
+    variants: {
+      python: `# 18. Course Schedule (Cycle Detection)
+# Bug: Never resets the visited state during backtracking, so revisiting a node through a
+# different path is flagged as a cycle even when there isn't one.
+
+def can_finish(num_courses, prerequisites):
+    adj = [[] for _ in range(num_courses)]
+    for course, pre in prerequisites:
+        adj[pre].append(course)
+
+    visited = [False] * num_courses
+
+    def has_cycle(course):
+        if visited[course]:
+            return True
+        visited[course] = True
+
+        for neighbor in adj[course]:
+            if has_cycle(neighbor):
+                return True
+        # Bug: Fails to reset visited[course] = False (backtracking reset missing!)
+        return False
+
+    for i in range(num_courses):
+        if has_cycle(i):
+            return False
+    return True
+
+
+print(can_finish(2, [[1, 0]]))`
+    }
   },
   {
     id: 'c3-update-install-order',
@@ -643,7 +1012,32 @@ function inorderTraversal(root) {
 
   traverse(root);
   return result;
-}`
+}`,
+    variants: {
+      python: `# 19. Tree Traversals
+# Bug: In-order traversal appends the root before the left subtree (this is Pre-Order, not In-Order).
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+
+def inorder_traversal(root):
+    result = []
+
+    def traverse(node):
+        if not node:
+            return
+        # Bug: Appends val first (this is Pre-Order traversal, not In-Order!)
+        result.append(node.val)
+        traverse(node.left)
+        traverse(node.right)
+
+    traverse(root)
+    return result`
+    }
   },
   {
     id: 'c4-house-robber-iii',
@@ -694,7 +1088,28 @@ function maxDepth(root: TreeNode | null): number {
 
   // Bug: Returns Math.max(leftDepth, rightDepth) without + 1 for current root node level!
   return Math.max(leftDepth, rightDepth);
-}`
+}`,
+    variants: {
+      python: `# 21. Maximum Depth of Binary Tree
+# Bug: Fails to add 1 for the current node's own level.
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+
+def max_depth(root):
+    if root is None:
+        return 0
+
+    left_depth = max_depth(root.left)
+    right_depth = max_depth(root.right)
+
+    # Bug: Returns max(left_depth, right_depth) without + 1 for the current root's level!
+    return max(left_depth, right_depth)`
+    }
   },
   {
     id: 'c4-diameter-binary-tree',
@@ -737,7 +1152,23 @@ function lowestCommonAncestor(root, p, q) {
   // Bug: Returns null if only one side is non-null instead of propagating non-null node!
   if (left && right) return root;
   return null;
-}`
+}`,
+    variants: {
+      python: `# 23. Lowest Common Ancestor of a Binary Tree
+# Bug: Returns None whenever only one side is non-null instead of propagating that non-null node up.
+
+def lowest_common_ancestor(root, p, q):
+    if not root or root is p or root is q:
+        return root
+
+    left = lowest_common_ancestor(root.left, p, q)
+    right = lowest_common_ancestor(root.right, p, q)
+
+    # Bug: Returns None if only one side is non-null instead of propagating the non-null node!
+    if left and right:
+        return root
+    return None`
+    }
   },
   {
     id: 'c4-level-order-traversal',
@@ -779,7 +1210,42 @@ func levelOrder(root *TreeNode) [][]int {
 	}
 
 	return result
-}`
+}`,
+    variants: {
+      python: `# 24. Binary Tree Level Order Traversal
+# Bug: Never snapshots the queue size at the start of a level, so nodes end up flattened
+# into one list instead of grouped by level.
+
+from collections import deque
+
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+
+def level_order(root):
+    result = []
+    if root is None:
+        return result
+
+    queue = deque([root])
+
+    while queue:
+        # Bug: Fails to snapshot the queue size at the start of the level loop
+        node = queue.popleft()
+
+        result.append([node.val])
+
+        if node.left:
+            queue.append(node.left)
+        if node.right:
+            queue.append(node.right)
+
+    return result`
+    }
   },
   {
     id: 'c4-validate-bst',
@@ -831,7 +1297,31 @@ function rob(nums) {
   return dp[nums.length - 1];
 }
 
-console.log(rob([1, 2, 3, 1]));`
+console.log(rob([1, 2, 3, 1]));`,
+    variants: {
+      python: `# 26. House Robber I
+# Bug: State transition ignores robbing the current house + dp[i-2].
+
+def rob(nums):
+    if len(nums) == 0:
+        return 0
+    if len(nums) == 1:
+        return nums[0]
+
+    dp = [0] * len(nums)
+    dp[0] = nums[0]
+    # Bug: Incorrect initialization of dp[1]
+    dp[1] = nums[1]
+
+    for i in range(2, len(nums)):
+        # Bug: Takes max(dp[i-1], nums[i]) instead of max(dp[i-1], dp[i-2] + nums[i])
+        dp[i] = max(dp[i - 1], nums[i])
+
+    return dp[-1]
+
+
+print(rob([1, 2, 3, 1]))`
+    }
   },
   {
     id: 'c5-house-robber-ii',
@@ -870,7 +1360,21 @@ function climbStairs(n: number): number {
   return climbStairs(n - 1) + climbStairs(n - 2);
 }
 
-console.log(climbStairs(45));`
+console.log(climbStairs(45));`,
+    variants: {
+      python: `# 28. Climbing Stairs
+# Bug: Naive exponential recursion O(2^N) — no memoization, blows up for larger n.
+
+def climb_stairs(n):
+    if n <= 2:
+        return n
+
+    # Bug: Missing memoization / iteration. Takes O(2^N) time!
+    return climb_stairs(n - 1) + climb_stairs(n - 2)
+
+
+print(climb_stairs(30))`
+    }
   },
   {
     id: 'c5-coin-change',
@@ -920,7 +1424,30 @@ function longestCommonSubsequence(text1, text2) {
   }
 
   return dp[m][n];
-}`
+}`,
+    variants: {
+      python: `# 30. Longest Common Subsequence
+# Bug: The 2D DP matrix is built from a single shared row reference, so every row mutates together.
+
+def longest_common_subsequence(text1, text2):
+    m = len(text1)
+    n = len(text2)
+
+    # Bug: [[0] * (n + 1)] * (m + 1) shares the same inner list across every row!
+    dp = [[0] * (n + 1)] * (m + 1)
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if text1[i - 1] == text2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+    return dp[m][n]
+
+
+print(longest_common_subsequence("abcde", "ace"))`
+    }
   },
   {
     id: 'c5-word-break',
@@ -980,7 +1507,111 @@ func isValid(s string) bool {
 
 func main() {
 	fmt.Println(isValid(")"))
+}`,
+    variants: {
+      javascript: `// 32. Valid Parentheses
+// Bug: Pops from the stack without checking it's non-empty first (relies on implicit undefined
+// instead of an explicit guard).
+// Bug 2: Never verifies the stack is empty at the end, so unclosed opening brackets pass.
+
+function isValid(s) {
+  const stack = [];
+  const pairs = { ')': '(', '}': '{', ']': '[' };
+
+  for (const char of s) {
+    if (char in pairs) {
+      // Bug: No check that stack.length > 0 before popping
+      const top = stack.pop();
+      if (top !== pairs[char]) {
+        return false;
+      }
+    } else {
+      stack.push(char);
+    }
+  }
+
+  return true; // Bug 2: Forgets to check stack.length === 0
+}
+
+console.log(isValid('(')); // Expected: false (unclosed bracket) — returns true instead`,
+      typescript: `// 32. Valid Parentheses
+// Bug: Pops from the stack without checking it's non-empty first (relies on implicit undefined
+// instead of an explicit guard).
+// Bug 2: Never verifies the stack is empty at the end, so unclosed opening brackets pass.
+
+function isValid(s: string): boolean {
+  const stack: string[] = [];
+  const pairs: Record<string, string> = { ')': '(', '}': '{', ']': '[' };
+
+  for (const char of s) {
+    if (char in pairs) {
+      // Bug: No check that stack.length > 0 before popping
+      const top = stack.pop();
+      if (top !== pairs[char]) {
+        return false;
+      }
+    } else {
+      stack.push(char);
+    }
+  }
+
+  return true; // Bug 2: Forgets to check stack.length === 0
+}
+
+console.log(isValid('(')); // Expected: false (unclosed bracket) — returns true instead`,
+      python: `# 32. Valid Parentheses
+# Bug: Pops from the stack without checking it's non-empty first -> crashes on a close-first input.
+# Bug 2: Never verifies the stack is empty at the end, so unclosed opening brackets pass.
+
+def is_valid(s):
+    stack = []
+    pairs = {')': '(', '}': '{', ']': '['}
+
+    for char in s:
+        if char in pairs:
+            # Bug: pop() on an empty list raises IndexError
+            top = stack.pop()
+            if top != pairs[char]:
+                return False
+        else:
+            stack.append(char)
+
+    return True  # Bug 2: Forgets to check len(stack) == 0
+
+print(is_valid(')'))  # Expected: False — raises IndexError instead`,
+      rust: `// 32. Valid Parentheses
+// Bug: Pops from the stack without checking it's non-empty first -> panics on a close-first input.
+// Bug 2: Never verifies the stack is empty at the end, so unclosed opening brackets pass.
+
+fn is_valid(s: &str) -> bool {
+    let mut stack: Vec<char> = Vec::new();
+
+    for ch in s.chars() {
+        match ch {
+            '(' | '{' | '[' => stack.push(ch),
+            ')' | '}' | ']' => {
+                // Bug: unwrap() on an empty stack panics
+                let top = stack.pop().unwrap();
+                let expected = match ch {
+                    ')' => '(',
+                    '}' => '{',
+                    _ => '[',
+                };
+                if top != expected {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    true // Bug 2: Forgets to check stack.is_empty()
+}
+
+fn main() {
+    println!("{}", is_valid(")")); // Expected: false — panics instead
 }`
+    }
   },
   {
     id: 'c6-min-stack',
@@ -1009,7 +1640,28 @@ class MinStack {
     // Bug: Destroys O(1) requirement by performing O(N) linear search!
     return Math.min(...this.stack);
   }
-}`
+}`,
+    variants: {
+      python: `# 33. Min Stack
+# Bug: get_min() does an O(N) scan with min(stack) instead of maintaining an O(1) auxiliary min stack.
+
+class MinStack:
+    def __init__(self):
+        self.stack = []
+
+    def push(self, val):
+        self.stack.append(val)
+
+    def pop(self):
+        self.stack.pop()
+
+    def top(self):
+        return self.stack[-1]
+
+    def get_min(self):
+        # Bug: Destroys the O(1) requirement by performing an O(N) linear scan!
+        return min(self.stack)`
+    }
   },
   {
     id: 'c6-daily-temperatures',
@@ -1056,7 +1708,27 @@ function largestRectangleArea(heights) {
   }
 
   return maxArea;
-}`
+}`,
+    variants: {
+      python: `# 35. Largest Rectangle in Histogram
+# Bug: O(N^2) nested iteration causes TLE on large histogram inputs.
+
+def largest_rectangle_area(heights):
+    max_area = 0
+
+    # Bug: Brute force O(N^2) calculation instead of the monotonic stack O(N) algorithm
+    for i in range(len(heights)):
+        min_height = heights[i]
+        for j in range(i, len(heights)):
+            min_height = min(min_height, heights[j])
+            area = min_height * (j - i + 1)
+            max_area = max(max_area, area)
+
+    return max_area
+
+
+print(largest_rectangle_area([2, 1, 5, 6, 2, 3]))`
+    }
   },
   {
     id: 'c6-implement-queue-stacks',
@@ -1151,7 +1823,38 @@ function search(nums, target) {
   }
 
   return -1;
-}`
+}`,
+    variants: {
+      python: `# 38. Search in Rotated Sorted Array
+# Bug: Uses a strict < instead of <= when checking whether the left half is sorted.
+
+def search(nums, target):
+    left = 0
+    right = len(nums) - 1
+
+    while left <= right:
+        mid = (left + right) // 2
+
+        if nums[mid] == target:
+            return mid
+
+        # Bug: Uses strictly < instead of <= for the left-half check
+        if nums[left] < nums[mid]:
+            if nums[left] <= target < nums[mid]:
+                right = mid - 1
+            else:
+                left = mid + 1
+        else:
+            if nums[mid] < target <= nums[right]:
+                left = mid + 1
+            else:
+                right = mid - 1
+
+    return -1
+
+
+print(search([4, 5, 6, 7, 0, 1, 2], 0))`
+    }
   },
   {
     id: 'c7-find-peak-element',
@@ -1169,7 +1872,21 @@ function findPeakElement(nums: number[]): number {
     }
   }
   return nums.length - 1;
-}`
+}`,
+    variants: {
+      python: `# 39. Find Peak Element
+# Bug: Performs a linear scan O(N) instead of binary search O(log N).
+
+def find_peak_element(nums):
+    # Bug: O(N) linear search violates the logarithmic time complexity requirement
+    for i in range(len(nums) - 1):
+        if nums[i] > nums[i + 1]:
+            return i
+    return len(nums) - 1
+
+
+print(find_peak_element([1, 2, 3, 1]))`
+    }
   },
   {
     id: 'c7-kth-smallest-sorted-matrix',
@@ -1213,13 +1930,154 @@ pub fn reverse_list(head: Option<Box<ListNode>>) -> Option<Box<ListNode>> {
 
     while let Some(mut node) = curr {
         // Bug: Borrow checker error. Must use Option::take() for node.next
-        curr = node.next; 
-        node.next = prev; 
+        curr = node.next;
+        node.next = prev;
         prev = Some(node);
     }
 
     prev
+}`,
+    variants: {
+      javascript: `// 41. Reverse Linked List
+// Bug: Overwrites node.next before saving a reference to the rest of the list, permanently
+// severing everything past the first node.
+
+function ListNode(val, next) {
+  this.val = val;
+  this.next = next === undefined ? null : next;
+}
+
+function reverseList(head) {
+  let prev = null;
+  let curr = head;
+
+  while (curr !== null) {
+    // Bug: Should save curr.next BEFORE reassigning it
+    curr.next = prev;
+    prev = curr;
+    curr = curr.next; // Bug: curr.next was just overwritten above, so this is always \`prev\`
+  }
+
+  return prev;
+}
+
+function toArray(node) {
+  const out = [];
+  while (node) { out.push(node.val); node = node.next; }
+  return out;
+}
+
+const list = new ListNode(1, new ListNode(2, new ListNode(3)));
+console.log(toArray(reverseList(list))); // Expected: [3, 2, 1] — returns [1] (rest of the list is lost)`,
+      typescript: `// 41. Reverse Linked List
+// Bug: Overwrites node.next before saving a reference to the rest of the list, permanently
+// severing everything past the first node.
+
+class ListNode {
+  val: number;
+  next: ListNode | null;
+  constructor(val: number, next: ListNode | null = null) {
+    this.val = val;
+    this.next = next;
+  }
+}
+
+function reverseList(head: ListNode | null): ListNode | null {
+  let prev: ListNode | null = null;
+  let curr = head;
+
+  while (curr !== null) {
+    // Bug: Should save curr.next BEFORE reassigning it
+    curr.next = prev;
+    prev = curr;
+    curr = curr.next; // Bug: curr.next was just overwritten above, so this is always \`prev\`
+  }
+
+  return prev;
+}
+
+function toArray(node: ListNode | null): number[] {
+  const out: number[] = [];
+  while (node) { out.push(node.val); node = node.next; }
+  return out;
+}
+
+const list = new ListNode(1, new ListNode(2, new ListNode(3)));
+console.log(toArray(reverseList(list))); // Expected: [3, 2, 1] — returns [1] (rest of the list is lost)`,
+      python: `# 41. Reverse Linked List
+# Bug: Overwrites node.next before saving a reference to the rest of the list, permanently
+# severing everything past the first node.
+
+class ListNode:
+    def __init__(self, val, next=None):
+        self.val = val
+        self.next = next
+
+
+def reverse_list(head):
+    prev = None
+    curr = head
+
+    while curr is not None:
+        # Bug: Should save curr.next BEFORE reassigning it
+        curr.next = prev
+        prev = curr
+        curr = curr.next  # Bug: curr.next was just overwritten above, so this is always \`prev\`
+
+    return prev
+
+
+def to_list(node):
+    out = []
+    while node:
+        out.append(node.val)
+        node = node.next
+    return out
+
+
+head = ListNode(1, ListNode(2, ListNode(3)))
+print(to_list(reverse_list(head)))  # Expected: [3, 2, 1] — returns [1] (rest of the list is lost)`,
+      go: `// 41. Reverse Linked List
+// Bug: Overwrites node.Next before saving a reference to the rest of the list, permanently
+// severing everything past the first node.
+
+package main
+
+import "fmt"
+
+type ListNode struct {
+	Val  int
+	Next *ListNode
+}
+
+func reverseList(head *ListNode) *ListNode {
+	var prev *ListNode
+	curr := head
+
+	for curr != nil {
+		// Bug: Should save curr.Next BEFORE reassigning it
+		curr.Next = prev
+		prev = curr
+		curr = curr.Next // Bug: curr.Next was just overwritten above, so this is always \`prev\`
+	}
+
+	return prev
+}
+
+func toSlice(node *ListNode) []int {
+	var out []int
+	for node != nil {
+		out = append(out, node.Val)
+		node = node.Next
+	}
+	return out
+}
+
+func main() {
+	head := &ListNode{Val: 1, Next: &ListNode{Val: 2, Next: &ListNode{Val: 3}}}
+	fmt.Println(toSlice(reverseList(head))) // Expected: [3 2 1] — returns [1] (rest of the list is lost)
 }`
+    }
   },
   {
     id: 'c8-detect-cycle',
@@ -1279,7 +2137,31 @@ function mergeTwoLists(list1: ListNode | null, list2: ListNode | null): ListNode
   }
 
   return current;
-}`
+}`,
+    variants: {
+      python: `# 43. Merge Two Sorted Lists
+# Bug: Missing the dummy-head-node pattern — mutates list1 in place and loses the head reference.
+
+class ListNode:
+    def __init__(self, val=0, next=None):
+        self.val = val
+        self.next = next
+
+
+def merge_two_lists(list1, list2):
+    # Bug: Missing dummy head node. Mutates list1 directly, losing the start reference
+    current = list1
+
+    while list1 is not None and list2 is not None:
+        if list1.val <= list2.val:
+            list1 = list1.next
+        else:
+            if current:
+                current.next = list2
+            list2 = list2.next
+
+    return current`
+    }
   },
   {
     id: 'c8-middle-linked-list',
@@ -1306,7 +2188,27 @@ function middleNode(head) {
   }
 
   return curr;
-}`
+}`,
+    variants: {
+      python: `# 44. Find Middle of Linked List
+# Bug: Traverses the list twice instead of using fast & slow pointers in a single pass.
+
+def middle_node(head):
+    count = 0
+    curr = head
+
+    # Bug: Two-pass traversal O(2N) instead of fast & slow pointers, single pass O(N)
+    while curr:
+        count += 1
+        curr = curr.next
+
+    mid = count // 2
+    curr = head
+    for _ in range(mid):
+        curr = curr.next
+
+    return curr`
+    }
   },
   {
     id: 'c8-lru-cache',
@@ -1395,7 +2297,26 @@ export async function getRecommendations(req: Request, res: Response) {
   
   // Bug 2: No Redis caching layer for hot items or user recommendation vectors
   return res.json({ recommendations });
-}`
+}`,
+    variants: {
+      python: `# 47. Design Recommendation Engine
+# Bug 1: N+1 database queries fetching product details in a loop.
+# Bug 2: Missing a caching layer for top-ranked recommendations.
+
+async def get_recommendations(user_id):
+    # Fetch candidate item IDs
+    candidate_rows = await db.fetch("SELECT item_id FROM user_candidates WHERE user_id = $1", user_id)
+
+    recommendations = []
+
+    # Bug 1: N+1 DB queries! Issues one SELECT per candidate, sequentially, over the network
+    for row in candidate_rows:
+        item_details = await db.fetch_one("SELECT * FROM products WHERE id = $1", row["item_id"])
+        recommendations.append(item_details)
+
+    # Bug 2: No caching layer for hot items or user recommendation vectors
+    return {"recommendations": recommendations}`
+    }
   },
   {
     id: 'c9-feature-store',
@@ -1452,7 +2373,24 @@ func (s *InferenceService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Batch processed")
 		batchRequests = nil
 	}
-}`
+}`,
+    variants: {
+      python: `# 49. Design a Real-Time ML Inference Microservice
+# Bug 1: Thread-unsafe list mutation during batching leads to race-condition data corruption.
+# Bug 2: Missing a request timeout / circuit breaker for slow inference calls.
+
+batch_requests = []  # Bug 1: Shared list mutated across concurrent request-handling threads!
+
+
+def handle_request(feature_val):
+    # Bug 1: Race condition! Concurrent requests append to the shared list without a lock
+    batch_requests.append(feature_val)
+
+    if len(batch_requests) >= 10:
+        # Process batch
+        print("Batch processed")
+        batch_requests.clear()`
+    }
   },
   {
     id: 'c9-petabyte-etl-pipeline',
@@ -1703,7 +2641,7 @@ def train_epoch_ddp(model, dataloader, optimizer, accumulation_steps=4):
   },
   {
     id: 'c10-llm-batch-dispatcher',
-    title: 'Request Batching Dispatcher for GPU Inference',
+    title: '58. Request Batching Dispatcher for GPU Inference',
     category: 'ML Engineering & LLM Infra',
     language: 'python',
     code: `# Request Batching Dispatcher for GPU Inference
@@ -1747,10 +2685,10 @@ print(d.submit("r3", ts=0.02))   # Expected None (batch just started) — but re
   // ==========================================
   {
     id: 'c11-fault-burst-detection',
-    title: '58. Fault Burst Detection (Sliding Window per Key)',
+    title: '59. Fault Burst Detection (Sliding Window per Key)',
     category: 'Streaming & Event Processing',
     language: 'typescript',
-    code: `// 58. Fault Burst Detection
+    code: `// 59. Fault Burst Detection
 // Bug: Uses a strict "<" eviction check instead of accounting for the closed
 // window boundary, so it silently drops the oldest timestamp one tick too early
 // and undercounts bursts where two faults are exactly windowSeconds apart.
@@ -1794,14 +2732,49 @@ console.log(keysWithFaultBursts(
   [{ key: 'a', ts: 0, type: 'FAULT' }, { key: 'a', ts: 10, type: 'FAULT' }],
   10,
   2
-)); // Expected: Set{'a'} (0 and 10 are exactly 10s apart -> should count)`
+)); // Expected: Set{'a'} (0 and 10 are exactly 10s apart -> should count)`,
+    variants: {
+      python: `# 59. Fault Burst Detection
+# Bug: Uses a strict "<" eviction check instead of accounting for the closed
+# window boundary, so it silently drops the oldest timestamp one tick too early
+# and undercounts bursts where two faults are exactly window_seconds apart.
+
+def keys_with_fault_bursts(events, window_seconds, fault_threshold):
+    flagged = set()
+    faults = {}
+
+    for key, ts, etype in events:
+        if etype != 'FAULT' or key in flagged:
+            continue
+
+        dq = faults.get(key, [])
+        dq.append(ts)
+
+        # Bug: should evict while (ts - dq[0]) > window_seconds (closed window).
+        # Using ">=" here evicts a timestamp that is still exactly in-window.
+        while dq and ts - dq[0] >= window_seconds:
+            dq.pop(0)
+
+        if len(dq) >= fault_threshold:
+            flagged.add(key)
+        faults[key] = dq
+
+    return flagged
+
+
+print(keys_with_fault_bursts(
+    [('a', 0, 'FAULT'), ('a', 10, 'FAULT')],
+    10,
+    2
+))  # Expected: {'a'} (0 and 10 are exactly 10s apart -> should count)`
+    }
   },
   {
     id: 'c11-rate-limiter',
-    title: '59. Per-Key Sliding Window Rate Limiter',
+    title: '60. Per-Key Sliding Window Rate Limiter',
     category: 'Streaming & Event Processing',
     language: 'javascript',
-    code: `// 59. Per-Key Sliding Window Rate Limiter
+    code: `// 60. Per-Key Sliding Window Rate Limiter
 // Bug: Checks the limit before evicting expired timestamps, so a key that
 // should have room again after old events age out stays rate-limited forever.
 
@@ -1833,14 +2806,44 @@ class RateLimiter {
 const rl = new RateLimiter(2, 10);
 console.log(rl.accept('v', 0));   // true
 console.log(rl.accept('v', 5));   // true
-console.log(rl.accept('v', 10));  // Expected: true (ts=0 has expired) — but returns false`
+console.log(rl.accept('v', 10));  // Expected: true (ts=0 has expired) — but returns false`,
+    variants: {
+      python: `# 60. Per-Key Sliding Window Rate Limiter
+# Bug: Checks the limit before evicting expired timestamps, so a key that
+# should have room again after old events age out stays rate-limited forever.
+
+class RateLimiter:
+    def __init__(self, limit, window_seconds):
+        self.limit = limit
+        self.window = window_seconds
+        self.log = {}
+
+    def accept(self, key, ts):
+        dq = self.log.setdefault(key, [])
+
+        # Bug: limit check happens BEFORE eviction, so expired entries still count.
+        if len(dq) >= self.limit:
+            return False
+
+        while dq and ts - dq[0] >= self.window:
+            dq.pop(0)
+
+        dq.append(ts)
+        return True
+
+
+rl = RateLimiter(2, 10)
+print(rl.accept('v', 0))   # True
+print(rl.accept('v', 5))   # True
+print(rl.accept('v', 10))  # Expected: True (ts=0 has expired) — but returns False`
+    }
   },
   {
     id: 'c11-longest-healthy-stretch',
-    title: '60. Longest Healthy Stretch (At Most K Warnings)',
+    title: '61. Longest Healthy Stretch (At Most K Warnings)',
     category: 'Streaming & Event Processing',
     language: 'python',
-    code: `# 60. Longest Healthy Stretch
+    code: `# 61. Longest Healthy Stretch
 # Bug: Does not reset the WARN counter when the window is forced past a FAULT
 # event, so warnings from before the fault keep counting against the new window.
 
@@ -1871,10 +2874,10 @@ print(longest_healthy_stretch(events, 1))  # Expected: 17 (span [3,20], 0 warns)
   },
   {
     id: 'c11-top-k-noisy-keys',
-    title: '61. Top-K Noisiest Keys in Trailing Window',
+    title: '62. Top-K Noisiest Keys in Trailing Window',
     category: 'Streaming & Event Processing',
     language: 'typescript',
-    code: `// 61. Top-K Noisiest Keys in Trailing Window
+    code: `// 62. Top-K Noisiest Keys in Trailing Window
 // Bug: Eviction decrements the count but never deletes zeroed-out keys from
 // the map, so stale keys with count 0 pollute later top-k queries and the
 // map grows unbounded (memory leak) as new keys stream in.
@@ -1915,14 +2918,48 @@ class TopKFaults {
 
 const tk = new TopKFaults(10, 2);
 tk.addFault('a', 0);
-console.log(tk.query(50)); // Expected: [] (a's fault expired) — but returns [['a', 0]]`
+console.log(tk.query(50)); // Expected: [] (a's fault expired) — but returns [['a', 0]]`,
+    variants: {
+      python: `# 62. Top-K Noisiest Keys in Trailing Window
+# Bug: Eviction decrements the count but never deletes zeroed-out keys from
+# the dict, so stale keys with count 0 pollute later top-k queries and the
+# dict grows unbounded (memory leak) as new keys stream in.
+
+class TopKFaults:
+    def __init__(self, window_seconds, k):
+        self.window_seconds = window_seconds
+        self.k = k
+        self.events = []  # (ts, key)
+        self.counts = {}
+
+    def add_fault(self, key, ts):
+        self.events.append((ts, key))
+        self.counts[key] = self.counts.get(key, 0) + 1
+        self._evict(ts)
+
+    def _evict(self, now):
+        while self.events and now - self.events[0][0] > self.window_seconds:
+            _, key = self.events.pop(0)
+            next_count = self.counts.get(key, 0) - 1
+            # Bug: should delete the key once its count hits 0.
+            self.counts[key] = next_count
+
+    def query(self, now):
+        self._evict(now)
+        return sorted(self.counts.items(), key=lambda kv: kv[1], reverse=True)[:self.k]
+
+
+tk = TopKFaults(10, 2)
+tk.add_fault('a', 0)
+print(tk.query(50))  # Expected: [] (a's fault expired) — but returns [('a', 0)]`
+    }
   },
   {
     id: 'c11-reorder-delayed-stream',
-    title: '62. Reorder a Bounded-Delay Event Stream (Min-Heap)',
+    title: '63. Reorder a Bounded-Delay Event Stream (Min-Heap)',
     category: 'Streaming & Event Processing',
     language: 'python',
-    code: `# 62. Reorder a Bounded-Delay Event Stream
+    code: `# 63. Reorder a Bounded-Delay Event Stream
 # Bug: Forgets to flush the remaining buffered events after the input stream
 # ends, so the last max_delay seconds worth of events are silently dropped.
 
@@ -1948,10 +2985,10 @@ print(reorder_stream(events, 3))  # Expected: [(1,'a'),(2,'b'),(3,'c')] — retu
   },
   {
     id: 'c11-total-online-time',
-    title: '63. Total Online Time from Connectivity Intervals',
+    title: '64. Total Online Time from Connectivity Intervals',
     category: 'Streaming & Event Processing',
     language: 'javascript',
-    code: `// 63. Total Online Time from Connectivity Intervals
+    code: `// 64. Total Online Time from Connectivity Intervals
 // Bug: Merges intervals without sorting them first, so out-of-order input
 // produces wrong totals whenever overlapping intervals aren't already adjacent.
 
@@ -1975,14 +3012,39 @@ function totalOnlineTime(intervals) {
   return total + (curEnd - curStart);
 }
 
-console.log(totalOnlineTime([[20, 25], [0, 10], [5, 15]])); // Expected: 20 — unsorted input gives wrong result`
+console.log(totalOnlineTime([[20, 25], [0, 10], [5, 15]])); // Expected: 20 — unsorted input gives wrong result`,
+    variants: {
+      python: `# 64. Total Online Time from Connectivity Intervals
+# Bug: Merges intervals without sorting them first, so out-of-order input
+# produces wrong totals whenever overlapping intervals aren't already adjacent.
+
+def total_online_time(intervals):
+    if not intervals:
+        return 0
+
+    # Bug: missing intervals.sort(key=lambda iv: iv[0]) before merging.
+    total = 0
+    cur_start, cur_end = intervals[0]
+
+    for s, e in intervals[1:]:
+        if s <= cur_end:
+            cur_end = max(cur_end, e)
+        else:
+            total += cur_end - cur_start
+            cur_start, cur_end = s, e
+
+    return total + (cur_end - cur_start)
+
+
+print(total_online_time([[20, 25], [0, 10], [5, 15]]))  # Expected: 20 — unsorted input gives wrong result`
+    }
   },
   {
     id: 'c11-severity-weighted-anomaly',
-    title: '64. Severity-Weighted Anomaly Detector (Sliding Window)',
+    title: '65. Severity-Weighted Anomaly Detector (Sliding Window)',
     category: 'Streaming & Event Processing',
     language: 'typescript',
-    code: `// 64. Severity-Weighted Anomaly Detector
+    code: `// 65. Severity-Weighted Anomaly Detector
 // Bug: Flags a key once its windowed severity sum reaches the threshold
 // (">=") instead of strictly exceeding it (">"), so keys sitting exactly
 // at their allowed budget get wrongly flagged as anomalous.
@@ -2034,14 +3096,58 @@ console.log(keysOverSeverityThreshold(
   [{ key: 'a', ts: 0, level: 'WARN' }, { key: 'a', ts: 1, level: 'WARN' }],
   10,
   2
-)); // Expected: Set{} (weight sums to exactly 2, not over budget) — but returns Set{'a'}`
+)); // Expected: Set{} (weight sums to exactly 2, not over budget) — but returns Set{'a'}`,
+    variants: {
+      python: `# 65. Severity-Weighted Anomaly Detector
+# Bug: Flags a key once its windowed severity sum reaches the threshold
+# (">=") instead of strictly exceeding it (">"), so keys sitting exactly
+# at their allowed budget get wrongly flagged as anomalous.
+
+SEVERITY = {'ERROR': 2, 'WARN': 1, 'INFO': 0}
+
+
+def keys_over_severity_threshold(events, window_seconds, severity_threshold):
+    flagged = set()
+    windows = {}
+    running = {}
+
+    for key, ts, level in events:
+        w = SEVERITY.get(level, 0)
+        if w == 0 or key in flagged:
+            continue
+
+        dq = windows.get(key, [])
+        dq.append((ts, w))
+        running[key] = running.get(key, 0) + w
+
+        while dq and ts - dq[0][0] > window_seconds:
+            _, old_w = dq.pop(0)
+            running[key] = running.get(key, 0) - old_w
+
+        # Bug: should be "> severity_threshold" (strictly over budget).
+        if running.get(key, 0) >= severity_threshold:
+            flagged.add(key)
+            windows.pop(key, None)
+            running.pop(key, None)
+            continue
+        windows[key] = dq
+
+    return flagged
+
+
+print(keys_over_severity_threshold(
+    [('a', 0, 'WARN'), ('a', 1, 'WARN')],
+    10,
+    2
+))  # Expected: set() (weight sums to exactly 2, not over budget) — but returns {'a'}`
+    }
   },
   {
     id: 'c11-rolling-p95-latency',
-    title: '65. Rolling P95 Latency (Sliding Window Order Statistics)',
+    title: '66. Rolling P95 Latency (Sliding Window Order Statistics)',
     category: 'Streaming & Event Processing',
     language: 'python',
-    code: `# 65. Rolling P95 Latency (Sliding Window Order Statistics)
+    code: `# 66. Rolling P95 Latency (Sliding Window Order Statistics)
 # Bug: Computes the p95 index BEFORE inserting the current event's latency
 # into the sorted window, so every reported p95 lags one event behind.
 
@@ -2075,10 +3181,10 @@ print(rolling_p95_latency(events, window_seconds=10))
   },
   {
     id: 'c11-duplicate-action-detection',
-    title: '66. Duplicate Action Detection (Sliding Window Keyed by User+Action)',
+    title: '67. Duplicate Action Detection (Sliding Window Keyed by User+Action)',
     category: 'Streaming & Event Processing',
     language: 'javascript',
-    code: `// 66. Duplicate Action Detection
+    code: `// 67. Duplicate Action Detection
 // Bug: Uses a strict "<" comparison instead of "<=", so a repeat action that
 // lands exactly windowSeconds after the previous one is silently missed.
 
@@ -2104,7 +3210,34 @@ console.log(duplicateActions([
   { userId: 'u1', ts: 0, action: 'CLICK' },
   { userId: 'u1', ts: 5, action: 'CLICK' },
 ], 5));
-// Expected: Set{'u1:CLICK'} (exactly 5s apart, within a 5s window) — returns Set{}`
+// Expected: Set{'u1:CLICK'} (exactly 5s apart, within a 5s window) — returns Set{}`,
+    variants: {
+      python: `# 67. Duplicate Action Detection
+# Bug: Uses a strict "<" comparison instead of "<=", so a repeat action that
+# lands exactly window_seconds after the previous one is silently missed.
+
+def duplicate_actions(events, window_seconds):
+    flagged = set()
+    last_seen = {}  # "user:action" -> most recent ts
+
+    for user_id, ts, action in events:
+        key = f"{user_id}:{action}"
+        prev = last_seen.get(key)
+
+        # Bug: should be "ts - prev <= window_seconds" (closed window boundary).
+        if prev is not None and ts - prev < window_seconds:
+            flagged.add(key)
+        last_seen[key] = ts
+
+    return flagged
+
+
+print(duplicate_actions([
+    ('u1', 0, 'CLICK'),
+    ('u1', 5, 'CLICK'),
+], 5))
+# Expected: {'u1:CLICK'} (exactly 5s apart, within a 5s window) — returns set()`
+    }
   },
 
   // ==========================================
@@ -2112,10 +3245,10 @@ console.log(duplicateActions([
   // ==========================================
   {
     id: 'c12-banking-system',
-    title: '67. In-Memory Banking System (Timestamp-Ordered History)',
+    title: '68. In-Memory Banking System (Timestamp-Ordered History)',
     category: 'Systems Design & Concurrency',
     language: 'go',
-    code: `// 67. In-Memory Banking System — Timestamp-Ordered Transaction History
+    code: `// 68. In-Memory Banking System — Timestamp-Ordered Transaction History
 // Bug: GetTransactions uses a lower-bound search for BOTH ends of the range,
 // so any transaction sitting exactly at endTs is excluded from the result.
 
@@ -2167,14 +3300,49 @@ func main() {
 
 	txs := bank.GetTransactions("a1", 5, 20)
 	fmt.Println(len(txs)) // Expected: 2 (ts=10 and ts=20) — returns 1
-}`
+}`,
+    variants: {
+      python: `# 68. In-Memory Banking System — Timestamp-Ordered Transaction History
+# Bug: get_transactions uses a lower-bound search for BOTH ends of the range,
+# so any transaction sitting exactly at end_ts is excluded from the result.
+
+from bisect import bisect_left
+
+
+class BankingSystem:
+    def __init__(self):
+        self.timestamps = {}
+        self.history = {}
+
+    def record(self, account, ts, kind, amount):
+        self.timestamps.setdefault(account, []).append(ts)
+        self.history.setdefault(account, []).append((ts, kind, amount))
+
+    # get_transactions should return transactions with start_ts <= ts <= end_ts.
+    def get_transactions(self, account, start_ts, end_ts):
+        ts = self.timestamps.get(account, [])
+        lo = bisect_left(ts, start_ts)
+        # Bug: should search for the index PAST the last ts <= end_ts (an upper
+        # bound). Reusing a lower-bound search here excludes ts == end_ts.
+        hi = bisect_left(ts, end_ts)
+        return self.history.get(account, [])[lo:hi]
+
+
+bank = BankingSystem()
+bank.record("a1", 0, "deposit", 100)
+bank.record("a1", 10, "deposit", 50)
+bank.record("a1", 20, "withdrawal", 30)
+
+txs = bank.get_transactions("a1", 5, 20)
+print(len(txs))  # Expected: 2 (ts=10 and ts=20) — returns 1`
+    }
   },
   {
     id: 'c12-ttl-cache',
-    title: '68. TTL Cache / Key-Value Store with Expiry',
+    title: '69. TTL Cache / Key-Value Store with Expiry',
     category: 'Systems Design & Concurrency',
     language: 'rust',
-    code: `// 68. TTL Cache / Key-Value Store with Expiry
+    code: `// 69. TTL Cache / Key-Value Store with Expiry
 // Bug: Expiry check uses "now > exp" instead of "now >= exp", so a key
 // survives one extra instant past the moment it should have expired.
 
@@ -2211,14 +3379,44 @@ fn main() {
     let mut cache = TTLCache::new();
     cache.set("k1", "v1", 10.0, 0.0);
     println!("{:?}", cache.get("k1", 10.0)); // Expected: None (expired exactly at ts=10) — returns Some("v1")
-}`
+}`,
+    variants: {
+      python: `# 69. TTL Cache / Key-Value Store with Expiry
+# Bug: Expiry check uses "now > exp" instead of "now >= exp", so a key
+# survives one extra instant past the moment it should have expired.
+
+class TTLCache:
+    def __init__(self):
+        self.store = {}
+        self.expiry = {}
+
+    def set(self, key, value, ttl_seconds, now):
+        self.store[key] = value
+        self.expiry[key] = now + ttl_seconds
+
+    def get(self, key, now):
+        if key not in self.expiry:
+            return None
+        exp = self.expiry[key]
+        # Bug: should be \`now >= exp\` — the expiry instant itself is expired.
+        if now > exp:
+            del self.store[key]
+            del self.expiry[key]
+            return None
+        return self.store.get(key)
+
+
+cache = TTLCache()
+cache.set("k1", "v1", 10.0, 0.0)
+print(cache.get("k1", 10.0))  # Expected: None (expired exactly at ts=10) — returns 'v1'`
+    }
   },
   {
     id: 'c12-file-dedup',
-    title: '69. File Deduplication via Content Hashing',
+    title: '70. File Deduplication via Content Hashing',
     category: 'Systems Design & Concurrency',
     language: 'python',
-    code: `# 69. File Deduplication via Content Hashing
+    code: `# 70. File Deduplication via Content Hashing
 # Bug: Only hashes the FIRST chunk of each file instead of streaming through
 # all of it, so any two files sharing the same first chunk_size bytes are
 # wrongly reported as duplicates even if their later content differs.
@@ -2253,10 +3451,10 @@ print(find_duplicate_files_on_disk([p1, p2], chunk_size=65536))
   },
   {
     id: 'c12-concurrent-crawler',
-    title: '70. Concurrent Web Crawler (Visited-Set Race)',
+    title: '71. Concurrent Web Crawler (Visited-Set Race)',
     category: 'Systems Design & Concurrency',
     language: 'go',
-    code: `// 70. Concurrent Web Crawler — Visited-Set Race
+    code: `// 71. Concurrent Web Crawler — Visited-Set Race
 // Bug: a URL is marked visited only AFTER fetch() returns, not before. Two
 // goroutines that see the same not-yet-visited URL at the same time can
 // both pass the check and both fetch it — a check-then-act race.
@@ -2312,14 +3510,69 @@ func main() {
 	// Same URL queued twice — two workers can both slip past the check.
 	crawl([]string{"http://x.com/shared", "http://x.com/shared"}, fetch, 4)
 	fmt.Println(fetchCount) // Expected: 1 (deduped by visited set) — can print 2 under the race
-}`
+}`,
+    variants: {
+      python: `# 71. Concurrent Web Crawler — Visited-Set Race
+# Bug: a URL is marked visited only AFTER fetch() returns, not before. Two
+# threads that see the same not-yet-visited URL at the same time can
+# both pass the check and both fetch it — a check-then-act race.
+
+import queue
+import threading
+
+
+def crawl(urls, fetch, workers):
+    visited = {}
+    lock = threading.Lock()
+    jobs = queue.Queue()
+    for u in urls:
+        jobs.put(u)
+
+    def worker():
+        while True:
+            try:
+                url = jobs.get_nowait()
+            except queue.Empty:
+                return
+
+            with lock:
+                already = visited.get(url, False)
+            if already:
+                continue
+
+            fetch(url)  # <-- race window: not marked visited yet
+
+            with lock:
+                visited[url] = True  # Bug: should be set BEFORE calling fetch()
+
+    threads = [threading.Thread(target=worker) for _ in range(workers)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+fetch_count = 0
+count_lock = threading.Lock()
+
+
+def fetch(url):
+    global fetch_count
+    with count_lock:
+        fetch_count += 1
+
+
+# Same URL queued twice — two workers can both slip past the check.
+crawl(["http://x.com/shared", "http://x.com/shared"], fetch, 4)
+print(fetch_count)  # Expected: 1 (deduped by visited set) — can print 2 under the race`
+    }
   },
   {
     id: 'c12-stack-trace-bottleneck',
-    title: '71. Stack-Trace Bottleneck Finder (Appearance Counts)',
+    title: '72. Stack-Trace Bottleneck Finder (Appearance Counts)',
     category: 'Systems Design & Concurrency',
     language: 'python',
-    code: `# 71. Stack-Trace Bottleneck Finder — Appearance Counts
+    code: `# 72. Stack-Trace Bottleneck Finder — Appearance Counts
 # Bug: Counts every frame occurrence in a sample instead of deduping per
 # sample first, so a recursive function appearing multiple times in a
 # SINGLE sample's stack gets over-counted relative to functions that only
@@ -2344,10 +3597,10 @@ print(find_high_level_bottlenecks(samples, top_n=1))
   },
   {
     id: 'c12-priority-delay-queue',
-    title: '72. Priority + Delay Message Queue (Two-Heap Design)',
+    title: '73. Priority + Delay Message Queue (Two-Heap Design)',
     category: 'Systems Design & Concurrency',
     language: 'typescript',
-    code: `// 72. Priority + Delay Message Queue
+    code: `// 73. Priority + Delay Message Queue
 // Bug: Promotion check uses "<" instead of "<=", so a message whose
 // delayUntil exactly equals \`now\` is left pending one extra tick instead
 // of becoming visible immediately.
@@ -2383,14 +3636,49 @@ class PriorityDelayQueue {
 
 const q = new PriorityDelayQueue();
 q.enqueue('future', 10, 100);
-console.log(q.dequeue(100)); // Expected: 'future' (visible exactly at ts=100) — returns null`
+console.log(q.dequeue(100)); // Expected: 'future' (visible exactly at ts=100) — returns null`,
+    variants: {
+      python: `# 73. Priority + Delay Message Queue
+# Bug: Promotion check uses "<" instead of "<=", so a message whose
+# delay_until exactly equals \`now\` is left pending one extra tick instead
+# of becoming visible immediately.
+
+class PriorityDelayQueue:
+    def __init__(self):
+        self.pending = []  # list of dicts: delay_until, seq, priority, message
+        self.visible = []  # list of dicts: priority, seq, message
+        self.seq = 0
+
+    def enqueue(self, message, priority, delay_until):
+        self.pending.append({"delay_until": delay_until, "seq": self.seq, "priority": priority, "message": message})
+        self.seq += 1
+        self.pending.sort(key=lambda p: p["delay_until"])
+
+    def _promote_ready(self, now):
+        # Bug: should be \`self.pending[0]["delay_until"] <= now\`.
+        while self.pending and self.pending[0]["delay_until"] < now:
+            p = self.pending.pop(0)
+            self.visible.append({"priority": p["priority"], "seq": p["seq"], "message": p["message"]})
+            self.visible.sort(key=lambda v: (-v["priority"], v["seq"]))
+
+    def dequeue(self, now):
+        self._promote_ready(now)
+        if not self.visible:
+            return None
+        return self.visible.pop(0)["message"]
+
+
+q = PriorityDelayQueue()
+q.enqueue('future', 10, 100)
+print(q.dequeue(100))  # Expected: 'future' (visible exactly at ts=100) — returns None`
+    }
   },
   {
     id: 'c12-diagnostic-agent-retry',
-    title: '73. Diagnostic Agent — Retry Helper (State Machine with Retries)',
+    title: '74. Diagnostic Agent — Retry Helper (State Machine with Retries)',
     category: 'Systems Design & Concurrency',
     language: 'javascript',
-    code: `// 73. Diagnostic Agent — Retry Helper
+    code: `// 74. Diagnostic Agent — Retry Helper
 // Bug: callWithRetry swallows the error after exhausting retries instead of
 // re-throwing it, so a permanently-failing tool silently returns \`undefined\`
 // instead of propagating the failure to the caller.
@@ -2413,7 +3701,117 @@ function callWithRetry(fn, maxRetries = 2) {
 
 const alwaysFails = () => { throw new ToolError('permanently down'); };
 console.log(callWithRetry(alwaysFails, 1));
-// Expected: throws ToolError('permanently down') after exhausting retries — returns undefined instead`
+// Expected: throws ToolError('permanently down') after exhausting retries — returns undefined instead`,
+    variants: {
+      python: `# 74. Diagnostic Agent — Retry Helper
+# Bug: call_with_retry swallows the error after exhausting retries instead of
+# re-raising it, so a permanently-failing tool silently returns \`None\`
+# instead of propagating the failure to the caller.
+
+class ToolError(Exception):
+    pass
+
+
+def call_with_retry(fn, max_retries=2):
+    last_err = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except ToolError as e:
+            last_err = e
+    # Bug: should \`raise last_err\` here instead of falling through.
+    return None
+
+
+def always_fails():
+    raise ToolError('permanently down')
+
+
+print(call_with_retry(always_fails, 1))
+# Expected: raises ToolError('permanently down') after exhausting retries — returns None instead`
+    }
+  },
+  // Added later — Arrays & Sliding Window: release-string comparison, a common variant of the
+  // "compare version numbers" interview question.
+  {
+    id: 'c1-release-tag-comparator',
+    title: '75. Release Tag Comparator',
+    category: 'Arrays & Sliding Window',
+    language: 'typescript',
+    code: `// 75. Release Tag Comparator
+// A build system tags each release like "2.10.1" or "2.10.1-beta" (dotted numeric
+// segments, optionally followed by a hyphen and a pre-release label). Given two tags,
+// return -1 / 0 / 1 depending on which one shipped first: compare the numeric segments
+// left to right, and if every segment matches, a tag WITHOUT a pre-release label is
+// considered newer than the same tag WITH one (e.g. "2.10.1" ships after "2.10.1-beta").
+//
+// Bug: Numeric segments are compared as strings, so "9" ranks above "10".
+// Bug 2: The pre-release-label tie-break is backwards — a tagged pre-release is
+// currently treated as newer than the final release instead of older.
+
+function compareReleaseTags(a: string, b: string): number {
+  const [aCore, aTag] = a.split('-');
+  const [bCore, bTag] = b.split('-');
+
+  const aParts = aCore.split('.');
+  const bParts = bCore.split('.');
+  const len = Math.max(aParts.length, bParts.length);
+
+  for (let i = 0; i < len; i++) {
+    const aSeg = aParts[i] ?? '0';
+    const bSeg = bParts[i] ?? '0';
+    // Bug: string comparison instead of numeric comparison
+    if (aSeg > bSeg) return 1;
+    if (aSeg < bSeg) return -1;
+  }
+
+  // Bug 2: should be the opposite — a pre-release tag means "older", not "newer"
+  if (aTag && !bTag) return 1;
+  if (!aTag && bTag) return -1;
+  if (aTag && bTag) return aTag < bTag ? -1 : aTag > bTag ? 1 : 0;
+
+  return 0;
+}
+
+console.log(compareReleaseTags('1.9.0', '1.10.0')); // Expected: -1 (1.9.0 shipped first) — returns 1
+console.log(compareReleaseTags('2.0.0-rc1', '2.0.0')); // Expected: -1 (rc1 shipped first) — returns 1`,
+    variants: {
+      python: `# 75. Release Tag Comparator
+# Bug: Numeric segments are compared as strings, so "9" ranks above "10".
+# Bug 2: The pre-release-label tie-break is backwards — a tagged pre-release is
+# currently treated as newer than the final release instead of older.
+
+def compare_release_tags(a, b):
+    a_core, _, a_tag = a.partition('-')
+    b_core, _, b_tag = b.partition('-')
+
+    a_parts = a_core.split('.')
+    b_parts = b_core.split('.')
+    length = max(len(a_parts), len(b_parts))
+
+    for i in range(length):
+        a_seg = a_parts[i] if i < len(a_parts) else '0'
+        b_seg = b_parts[i] if i < len(b_parts) else '0'
+        # Bug: string comparison instead of numeric comparison
+        if a_seg > b_seg:
+            return 1
+        if a_seg < b_seg:
+            return -1
+
+    # Bug 2: should be the opposite — a pre-release tag means "older", not "newer"
+    if a_tag and not b_tag:
+        return 1
+    if not a_tag and b_tag:
+        return -1
+    if a_tag and b_tag:
+        return -1 if a_tag < b_tag else (1 if a_tag > b_tag else 0)
+
+    return 0
+
+
+print(compare_release_tags('1.9.0', '1.10.0'))  # Expected: -1 (1.9.0 shipped first) — returns 1
+print(compare_release_tags('2.0.0-rc1', '2.0.0'))  # Expected: -1 (rc1 shipped first) — returns 1`
+    }
   }
 ];
 

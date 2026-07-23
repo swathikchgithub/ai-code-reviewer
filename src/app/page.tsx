@@ -15,7 +15,7 @@ import {
   Zap
 } from 'lucide-react';
 
-import { EXAMPLES, ExamplePreset } from '@/lib/examples';
+import { EXAMPLES, ExamplePreset, ExampleLanguage } from '@/lib/examples';
 
 interface Issue {
   line: number;
@@ -38,15 +38,25 @@ interface ReviewResult {
   space_complexity?: string;
   complexity_analysis?: string;
   refactored_code: string;
+  eli5_explanation?: string;
   usage?: UsageInfo;
 }
 
 interface FixState {
   fixed_code?: string;
   explanation?: string;
+  eli5_explanation?: string;
   loading: boolean;
   copied?: boolean;
 }
+
+const ALL_LANGUAGES: { value: ExampleLanguage; label: string }[] = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+];
 
 const CATEGORIES: ExamplePreset['category'][] = [
   'Arrays & Sliding Window',
@@ -67,6 +77,10 @@ export default function Home() {
   const [selectedExampleId, setSelectedExampleId] = useState('c1-max-sum-subarray-k');
   const [language, setLanguage] = useState('javascript');
   const [code, setCode] = useState(() => EXAMPLES[0]?.code || '');
+  // Once the user explicitly picks a language, keep using it across problem
+  // switches (when that problem has a version in it) instead of resetting
+  // to each problem's own default language.
+  const [preferredLanguage, setPreferredLanguage] = useState<ExampleLanguage | null>(null);
   const [style, setStyle] = useState<'friendly' | 'strict' | 'complexity' | 'architect'>('complexity');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,21 +89,41 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [fixes, setFixes] = useState<Record<number, FixState>>({});
 
+  const selectedPreset = EXAMPLES.find(ex => ex.id === selectedExampleId);
+  const availableLanguages = selectedPreset
+    ? new Set<ExampleLanguage>([
+        selectedPreset.language,
+        ...(Object.keys(selectedPreset.variants ?? {}) as ExampleLanguage[]),
+      ])
+    : null; // null = custom code in the editor; every language is just a label, not a swap
+
   const handleSelectExample = (id: string) => {
     const found = EXAMPLES.find(ex => ex.id === id);
     if (found) {
       setSelectedExampleId(found.id);
-      setLanguage(found.language);
-      setCode(found.code);
+      const preferredCode = preferredLanguage === found.language
+        ? found.code
+        : preferredLanguage
+          ? found.variants?.[preferredLanguage]
+          : undefined;
+      if (preferredLanguage && preferredCode) {
+        setLanguage(preferredLanguage);
+        setCode(preferredCode);
+      } else {
+        setLanguage(found.language);
+        setCode(found.code);
+      }
     }
   };
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    const found = EXAMPLES.find(ex => ex.language === newLang);
-    if (found) {
-      setSelectedExampleId(found.id);
-      setCode(found.code);
+    setPreferredLanguage(newLang as ExampleLanguage);
+    if (selectedPreset) {
+      const variantCode = newLang === selectedPreset.language
+        ? selectedPreset.code
+        : selectedPreset.variants?.[newLang as ExampleLanguage];
+      if (variantCode) setCode(variantCode);
     }
   };
 
@@ -144,6 +178,7 @@ export default function Home() {
         [index]: {
           fixed_code: data.fixed_code,
           explanation: data.explanation,
+          eli5_explanation: data.eli5_explanation,
           loading: false,
           copied: false
         }
@@ -276,11 +311,14 @@ export default function Home() {
                   onChange={(e) => handleLanguageChange(e.target.value)}
                   title="Select Language"
                 >
-                  <option value="javascript">JavaScript</option>
-                  <option value="typescript">TypeScript</option>
-                  <option value="python">Python</option>
-                  <option value="go">Go</option>
-                  <option value="rust">Rust</option>
+                  {ALL_LANGUAGES.map(({ value, label }) => {
+                    const unavailable = !!availableLanguages && !availableLanguages.has(value);
+                    return (
+                      <option key={value} value={value} disabled={unavailable}>
+                        {label}{unavailable ? ' (no code for this problem)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -486,6 +524,12 @@ export default function Home() {
                                 {fixes[idx].explanation}
                               </div>
                             )}
+                            {fixes[idx].eli5_explanation && (
+                              <div className="eli5-explanation">
+                                <span className="eli5-badge">🧒 Like I&apos;m 5</span>
+                                <p>{fixes[idx].eli5_explanation}</p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -532,7 +576,14 @@ export default function Home() {
                     <span>{copied ? 'Copied!' : 'Copy Code'}</span>
                   </button>
                 </div>
-                
+
+                {reviewResult.eli5_explanation && (
+                  <div className="eli5-explanation" style={{ marginBottom: '1rem' }}>
+                    <span className="eli5-badge">🧒 Like I&apos;m 5</span>
+                    <p>{reviewResult.eli5_explanation}</p>
+                  </div>
+                )}
+
                 {/* Premium read-only Monaco Editor display */}
                 <div style={{ height: '350px', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
                   <Editor

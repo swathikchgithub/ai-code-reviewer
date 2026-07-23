@@ -596,6 +596,38 @@ body {
   color: #a7f3d0;
 }
 
+.eli5-explanation {
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
+.fix-drawer .eli5-explanation {
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+.eli5-explanation p {
+  margin: 0.35rem 0 0;
+}
+
+.eli5-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
 /* Suggestions List */
 .suggestions-list {
   display: flex;

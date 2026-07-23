@@ -16,7 +16,8 @@ export const reviewSchema = z.object({
   time_complexity: z.string().describe('Big-O Time Complexity of original code vs optimal solution, e.g. "O(N²) -> O(N)".'),
   space_complexity: z.string().describe('Big-O Auxiliary Space Complexity of original code vs optimal solution, e.g. "O(N) -> O(1)".'),
   complexity_analysis: z.string().describe('Concise Big-O time and space complexity evaluation explaining any algorithmic bottlenecks.'),
-  refactored_code: z.string().describe('The complete refactored code with all identified issues resolved.')
+  refactored_code: z.string().describe('The complete refactored code with all identified issues resolved.'),
+  eli5_explanation: z.string().describe('The overall fix explained like the reader is 5 years old: 2-3 short sentences, plain everyday words, no jargon, using a simple real-world analogy instead of technical terms.')
 });
 
 export async function POST(request: Request) {
@@ -59,6 +60,8 @@ Rate the code fairly while offering helpful guidance for improvement.
 Provide an exact estimation for time_complexity and space_complexity fields, plus a clean, readable refactored solution.`;
         break;
     }
+
+    systemPrompt += `\nAlso provide eli5_explanation: explain the overall fix as if to a curious 5-year-old, in 2-3 short sentences with a simple everyday analogy and no technical jargon.`;
 
     const promptText = `Language: ${language || 'javascript'}
 Code to review:
