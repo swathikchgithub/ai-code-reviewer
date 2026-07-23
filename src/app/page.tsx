@@ -23,6 +23,13 @@ interface Issue {
   description: string;
 }
 
+interface UsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
 interface ReviewResult {
   issues: Issue[];
   suggestions: string[];
@@ -31,6 +38,7 @@ interface ReviewResult {
   space_complexity?: string;
   complexity_analysis?: string;
   refactored_code: string;
+  usage?: UsageInfo;
 }
 
 interface FixState {
@@ -188,6 +196,13 @@ export default function Home() {
     return 'score-low';
   };
 
+  // Qualitative label paired with the score, using the same thresholds as the color
+  const getScoreLabel = (score: number) => {
+    if (score >= 8) return 'Excellent';
+    if (score >= 5) return 'Needs Work';
+    return 'Critical Issues';
+  };
+
   return (
     <>
       <header className="app-header">
@@ -337,23 +352,37 @@ export default function Home() {
                   </p>
                 </div>
                 
-                <div className="score-badge-wrapper">
-                  <svg className="score-ring" width="72" height="72">
-                    <circle className="score-ring-circle-bg" cx="36" cy="36" r="30" />
-                    <circle 
-                      className={`score-ring-circle ${getScoreColorClass(reviewResult.score)}`} 
-                      cx="36" 
-                      cy="36" 
-                      r="30" 
-                      strokeDasharray="188.4"
-                      strokeDashoffset={188.4 - (188.4 * reviewResult.score) / 10}
-                    />
-                  </svg>
-                  <span className={`score-text ${getScoreColorClass(reviewResult.score)}`}>
-                    {reviewResult.score}
+                <div className="score-rating">
+                  <div className="score-badge-wrapper">
+                    <svg className="score-ring" width="72" height="72">
+                      <circle className="score-ring-circle-bg" cx="36" cy="36" r="30" />
+                      <circle
+                        className={`score-ring-circle ${getScoreColorClass(reviewResult.score)}`}
+                        cx="36"
+                        cy="36"
+                        r="30"
+                        strokeDasharray="188.4"
+                        strokeDashoffset={188.4 - (188.4 * reviewResult.score) / 10}
+                      />
+                    </svg>
+                    <span className={`score-text ${getScoreColorClass(reviewResult.score)}`}>
+                      {reviewResult.score}
+                    </span>
+                  </div>
+                  <span className={`score-label ${getScoreColorClass(reviewResult.score)}`}>
+                    {getScoreLabel(reviewResult.score)}
                   </span>
                 </div>
               </div>
+
+              {/* Token usage / estimated cost for this analysis */}
+              {reviewResult.usage && (
+                <div className="usage-footnote">
+                  {reviewResult.usage.totalTokens.toLocaleString()} tokens
+                  ({reviewResult.usage.inputTokens.toLocaleString()} in / {reviewResult.usage.outputTokens.toLocaleString()} out)
+                  {' · ~'}${reviewResult.usage.estimatedCostUsd.toFixed(4)}
+                </div>
+              )}
 
               {/* Big-O Complexity Card */}
               {(reviewResult.time_complexity || reviewResult.space_complexity) && (

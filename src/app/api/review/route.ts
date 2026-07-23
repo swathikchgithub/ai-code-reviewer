@@ -1,5 +1,5 @@
 import { generateObject } from 'ai';
-import { reviewModel } from '@/lib/ai';
+import { reviewModel, estimateCostUsd } from '@/lib/ai';
 import { z } from 'zod';
 
 // Define the Zod schema for structured output
@@ -73,7 +73,18 @@ ${code}
       prompt: promptText,
     });
 
-    return Response.json(result.object);
+    const inputTokens = result.usage.inputTokens ?? 0;
+    const outputTokens = result.usage.outputTokens ?? 0;
+
+    return Response.json({
+      ...result.object,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens: result.usage.totalTokens ?? inputTokens + outputTokens,
+        estimatedCostUsd: estimateCostUsd(inputTokens, outputTokens),
+      },
+    });
   } catch (error: unknown) {
     console.error('API Error in /api/review:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate review. Please check your credentials and configuration.';

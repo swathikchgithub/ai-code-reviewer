@@ -384,6 +384,29 @@ body {
   font-size: 0.85rem;
 }
 
+/* Token usage / estimated cost, shown under the score card */
+.usage-footnote {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: -0.5rem;
+  padding: 0 0.25rem;
+}
+
+/* Ring + qualitative label, grouped so the label sits next to the ring */
+.score-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.score-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* Circular Score Badge */
 .score-badge-wrapper {
   position: relative;
