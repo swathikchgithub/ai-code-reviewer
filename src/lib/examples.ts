@@ -11,7 +11,9 @@ export interface ExamplePreset {
     | 'Binary Search'
     | 'Linked Lists'
     | 'ML & System Design'
-    | 'ML Engineering & LLM Infra';
+    | 'ML Engineering & LLM Infra'
+    | 'Streaming & Event Processing'
+    | 'Systems Design & Concurrency';
   language: 'javascript' | 'typescript' | 'python' | 'go' | 'rust';
   code: string;
 }
@@ -572,6 +574,43 @@ func canFinish(numCourses int, prerequisites [][]int) bool {
 func main() {
 	fmt.Println(canFinish(2, [][]int{{1, 0}}))
 }`
+  },
+  {
+    id: 'c3-update-install-order',
+    title: "Update Install Order (Topological Sort, Kahn's Algorithm)",
+    category: 'Graphs & BFS/DFS',
+    language: 'python',
+    code: `# Update Install Order — Topological Sort via Kahn's Algorithm
+# Bug: Indegree map is only seeded from dependency pairs, so any update with
+# no incoming edges never gets a key at all, causing a KeyError instead of
+# being correctly treated as immediately installable.
+
+from collections import defaultdict, deque
+
+def update_install_order(updates, dependencies):
+    graph = defaultdict(list)
+    indegree = {}  # Bug: should be initialized to {u: 0 for u in updates}
+
+    for pre, dep in dependencies:
+        graph[pre].append(dep)
+        indegree[dep] = indegree.get(dep, 0) + 1
+
+    # Bug: KeyError here whenever an update never shows up as a "dep"
+    queue = deque(u for u in updates if indegree[u] == 0)
+    order = []
+
+    while queue:
+        u = queue.popleft()
+        order.append(u)
+        for v in graph[u]:
+            indegree[v] -= 1
+            if indegree[v] == 0:
+                queue.append(v)
+
+    return order if len(order) == len(updates) else None
+
+print(update_install_order(["A", "B", "C"], [("A", "B")]))
+# Expected: ['A', 'C', 'B'] or ['C', 'A', 'B'] — raises KeyError instead`
   },
 
   // ==========================================
@@ -1661,6 +1700,720 @@ def train_epoch_ddp(model, dataloader, optimizer, accumulation_steps=4):
             # Bug 2: Redundant loss division or gradient scaling before step!
             optimizer.step()
             optimizer.zero_grad()`
+  },
+  {
+    id: 'c10-llm-batch-dispatcher',
+    title: 'Request Batching Dispatcher for GPU Inference',
+    category: 'ML Engineering & LLM Infra',
+    language: 'python',
+    code: `# Request Batching Dispatcher for GPU Inference
+# Bug: Starts the max-wait timer from the FIRST request ever received instead
+# of the first request in the CURRENT batch, so after any full-size flush the
+# next batch's wait budget is already exhausted and every request flushes
+# immediately as a batch of size 1 — destroying GPU utilization.
+
+class BatchDispatcher:
+    def __init__(self, max_batch_size=100, max_wait_seconds=0.05):
+        self.max_batch_size = max_batch_size
+        self.max_wait_seconds = max_wait_seconds
+        self.pending = []
+        self.batch_start_ts = None
+
+    def submit(self, request, ts):
+        if self.batch_start_ts is None:
+            self.batch_start_ts = ts
+
+        self.pending.append(request)
+
+        if len(self.pending) >= self.max_batch_size:
+            return self._flush()  # Bug: doesn't reset batch_start_ts here
+        if ts - self.batch_start_ts >= self.max_wait_seconds:
+            return self._flush()
+        return None
+
+    def _flush(self):
+        batch = self.pending
+        self.pending = []
+        return batch
+
+d = BatchDispatcher(max_batch_size=2, max_wait_seconds=0.05)
+print(d.submit("r1", ts=0.0))    # None
+print(d.submit("r2", ts=0.01))   # ['r1', 'r2'] — flush resets batch_start_ts? No!
+print(d.submit("r3", ts=0.02))   # Expected None (batch just started) — but returns ['r3'] immediately`
+  },
+
+  // ==========================================
+  // CATEGORY 11: STREAMING & EVENT PROCESSING
+  // ==========================================
+  {
+    id: 'c11-fault-burst-detection',
+    title: '58. Fault Burst Detection (Sliding Window per Key)',
+    category: 'Streaming & Event Processing',
+    language: 'typescript',
+    code: `// 58. Fault Burst Detection
+// Bug: Uses a strict "<" eviction check instead of accounting for the closed
+// window boundary, so it silently drops the oldest timestamp one tick too early
+// and undercounts bursts where two faults are exactly windowSeconds apart.
+
+interface LogEvent {
+  key: string;
+  ts: number;
+  type: string;
+}
+
+function keysWithFaultBursts(
+  events: LogEvent[],
+  windowSeconds: number,
+  faultThreshold: number
+): Set<string> {
+  const flagged = new Set<string>();
+  const faults = new Map<string, number[]>();
+
+  for (const { key, ts, type } of events) {
+    if (type !== 'FAULT' || flagged.has(key)) continue;
+
+    const dq = faults.get(key) ?? [];
+    dq.push(ts);
+
+    // Bug: should evict while (ts - dq[0]) > windowSeconds (closed window).
+    // Using ">=" here evicts a timestamp that is still exactly in-window.
+    while (dq.length && ts - dq[0] >= windowSeconds) {
+      dq.shift();
+    }
+
+    if (dq.length >= faultThreshold) {
+      flagged.add(key);
+    }
+    faults.set(key, dq);
+  }
+
+  return flagged;
+}
+
+console.log(keysWithFaultBursts(
+  [{ key: 'a', ts: 0, type: 'FAULT' }, { key: 'a', ts: 10, type: 'FAULT' }],
+  10,
+  2
+)); // Expected: Set{'a'} (0 and 10 are exactly 10s apart -> should count)`
+  },
+  {
+    id: 'c11-rate-limiter',
+    title: '59. Per-Key Sliding Window Rate Limiter',
+    category: 'Streaming & Event Processing',
+    language: 'javascript',
+    code: `// 59. Per-Key Sliding Window Rate Limiter
+// Bug: Checks the limit before evicting expired timestamps, so a key that
+// should have room again after old events age out stays rate-limited forever.
+
+class RateLimiter {
+  constructor(limit, windowSeconds) {
+    this.limit = limit;
+    this.window = windowSeconds;
+    this.log = new Map();
+  }
+
+  accept(key, ts) {
+    if (!this.log.has(key)) this.log.set(key, []);
+    const dq = this.log.get(key);
+
+    // Bug: limit check happens BEFORE eviction, so expired entries still count.
+    if (dq.length >= this.limit) {
+      return false;
+    }
+
+    while (dq.length && ts - dq[0] >= this.window) {
+      dq.shift();
+    }
+
+    dq.push(ts);
+    return true;
+  }
+}
+
+const rl = new RateLimiter(2, 10);
+console.log(rl.accept('v', 0));   // true
+console.log(rl.accept('v', 5));   // true
+console.log(rl.accept('v', 10));  // Expected: true (ts=0 has expired) — but returns false`
+  },
+  {
+    id: 'c11-longest-healthy-stretch',
+    title: '60. Longest Healthy Stretch (At Most K Warnings)',
+    category: 'Streaming & Event Processing',
+    language: 'python',
+    code: `# 60. Longest Healthy Stretch
+# Bug: Does not reset the WARN counter when the window is forced past a FAULT
+# event, so warnings from before the fault keep counting against the new window.
+
+def longest_healthy_stretch(events, k):
+    best = 0
+    left = 0
+    warns = 0
+
+    for right, (ts, etype) in enumerate(events):
+        if etype == "FAULT":
+            left = right + 1
+            # Bug: missing "warns = 0" reset here — stale WARN count leaks
+            # into the next window and can wrongly shrink it.
+            continue
+        if etype == "WARN":
+            warns += 1
+        while warns > k:
+            if events[left][1] == "WARN":
+                warns -= 1
+            left += 1
+        if left <= right:
+            best = max(best, events[right][0] - events[left][0])
+
+    return best
+
+events = [(0, "WARN"), (1, "WARN"), (2, "FAULT"), (3, "OK"), (20, "OK")]
+print(longest_healthy_stretch(events, 1))  # Expected: 17 (span [3,20], 0 warns)`
+  },
+  {
+    id: 'c11-top-k-noisy-keys',
+    title: '61. Top-K Noisiest Keys in Trailing Window',
+    category: 'Streaming & Event Processing',
+    language: 'typescript',
+    code: `// 61. Top-K Noisiest Keys in Trailing Window
+// Bug: Eviction decrements the count but never deletes zeroed-out keys from
+// the map, so stale keys with count 0 pollute later top-k queries and the
+// map grows unbounded (memory leak) as new keys stream in.
+
+class TopKFaults {
+  private windowSeconds: number;
+  private k: number;
+  private events: [number, string][] = [];
+  private counts = new Map<string, number>();
+
+  constructor(windowSeconds: number, k: number) {
+    this.windowSeconds = windowSeconds;
+    this.k = k;
+  }
+
+  addFault(key: string, ts: number): void {
+    this.events.push([ts, key]);
+    this.counts.set(key, (this.counts.get(key) ?? 0) + 1);
+    this.evict(ts);
+  }
+
+  private evict(now: number): void {
+    while (this.events.length && now - this.events[0][0] > this.windowSeconds) {
+      const [, key] = this.events.shift()!;
+      const next = (this.counts.get(key) ?? 0) - 1;
+      // Bug: should delete the key once its count hits 0.
+      this.counts.set(key, next);
+    }
+  }
+
+  query(now: number): [string, number][] {
+    this.evict(now);
+    return [...this.counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, this.k);
+  }
+}
+
+const tk = new TopKFaults(10, 2);
+tk.addFault('a', 0);
+console.log(tk.query(50)); // Expected: [] (a's fault expired) — but returns [['a', 0]]`
+  },
+  {
+    id: 'c11-reorder-delayed-stream',
+    title: '62. Reorder a Bounded-Delay Event Stream (Min-Heap)',
+    category: 'Streaming & Event Processing',
+    language: 'python',
+    code: `# 62. Reorder a Bounded-Delay Event Stream
+# Bug: Forgets to flush the remaining buffered events after the input stream
+# ends, so the last max_delay seconds worth of events are silently dropped.
+
+import heapq
+
+def reorder_stream(events, max_delay):
+    heap = []
+    out = []
+    newest = float("-inf")
+
+    for ev in events:  # ev = (ts, payload)
+        heapq.heappush(heap, ev)
+        newest = max(newest, ev[0])
+        while heap and heap[0][0] <= newest - max_delay:
+            out.append(heapq.heappop(heap))
+
+    # Bug: missing final drain of the heap — anything still buffered when
+    # the stream ends never gets emitted.
+    return out
+
+events = [(3, "c"), (1, "a"), (2, "b")]
+print(reorder_stream(events, 3))  # Expected: [(1,'a'),(2,'b'),(3,'c')] — returns []`
+  },
+  {
+    id: 'c11-total-online-time',
+    title: '63. Total Online Time from Connectivity Intervals',
+    category: 'Streaming & Event Processing',
+    language: 'javascript',
+    code: `// 63. Total Online Time from Connectivity Intervals
+// Bug: Merges intervals without sorting them first, so out-of-order input
+// produces wrong totals whenever overlapping intervals aren't already adjacent.
+
+function totalOnlineTime(intervals) {
+  if (intervals.length === 0) return 0;
+
+  // Bug: missing intervals.sort((a, b) => a[0] - b[0]) before merging.
+  let total = 0;
+  let [curStart, curEnd] = intervals[0];
+
+  for (let i = 1; i < intervals.length; i++) {
+    const [s, e] = intervals[i];
+    if (s <= curEnd) {
+      curEnd = Math.max(curEnd, e);
+    } else {
+      total += curEnd - curStart;
+      [curStart, curEnd] = [s, e];
+    }
+  }
+
+  return total + (curEnd - curStart);
+}
+
+console.log(totalOnlineTime([[20, 25], [0, 10], [5, 15]])); // Expected: 20 — unsorted input gives wrong result`
+  },
+  {
+    id: 'c11-severity-weighted-anomaly',
+    title: '64. Severity-Weighted Anomaly Detector (Sliding Window)',
+    category: 'Streaming & Event Processing',
+    language: 'typescript',
+    code: `// 64. Severity-Weighted Anomaly Detector
+// Bug: Flags a key once its windowed severity sum reaches the threshold
+// (">=") instead of strictly exceeding it (">"), so keys sitting exactly
+// at their allowed budget get wrongly flagged as anomalous.
+
+interface LogEvent {
+  key: string;
+  ts: number;
+  level: string;
+}
+
+const SEVERITY: Record<string, number> = { ERROR: 2, WARN: 1, INFO: 0 };
+
+function keysOverSeverityThreshold(
+  events: LogEvent[],
+  windowSeconds: number,
+  severityThreshold: number
+): Set<string> {
+  const flagged = new Set<string>();
+  const windows = new Map<string, [number, number][]>();
+  const running = new Map<string, number>();
+
+  for (const { key, ts, level } of events) {
+    const w = SEVERITY[level] ?? 0;
+    if (w === 0 || flagged.has(key)) continue;
+
+    const dq = windows.get(key) ?? [];
+    dq.push([ts, w]);
+    running.set(key, (running.get(key) ?? 0) + w);
+
+    while (dq.length && ts - dq[0][0] > windowSeconds) {
+      const [, oldW] = dq.shift()!;
+      running.set(key, (running.get(key) ?? 0) - oldW);
+    }
+
+    // Bug: should be "> severityThreshold" (strictly over budget).
+    if ((running.get(key) ?? 0) >= severityThreshold) {
+      flagged.add(key);
+      windows.delete(key);
+      running.delete(key);
+      continue;
+    }
+    windows.set(key, dq);
+  }
+
+  return flagged;
+}
+
+console.log(keysOverSeverityThreshold(
+  [{ key: 'a', ts: 0, level: 'WARN' }, { key: 'a', ts: 1, level: 'WARN' }],
+  10,
+  2
+)); // Expected: Set{} (weight sums to exactly 2, not over budget) — but returns Set{'a'}`
+  },
+  {
+    id: 'c11-rolling-p95-latency',
+    title: '65. Rolling P95 Latency (Sliding Window Order Statistics)',
+    category: 'Streaming & Event Processing',
+    language: 'python',
+    code: `# 65. Rolling P95 Latency (Sliding Window Order Statistics)
+# Bug: Computes the p95 index BEFORE inserting the current event's latency
+# into the sorted window, so every reported p95 lags one event behind.
+
+from bisect import insort, bisect_left
+from collections import deque
+
+def rolling_p95_latency(events, window_seconds):
+    out = []
+    dq = deque()  # (ts, latency)
+    sorted_latencies = []
+
+    for ts, latency in events:
+        dq.append((ts, latency))
+        while dq and ts - dq[0][0] > window_seconds:
+            _, old_latency = dq.popleft()
+            i = bisect_left(sorted_latencies, old_latency)
+            sorted_latencies.pop(i)
+
+        # Bug: index is computed before insort() adds \`latency\`, so it reads
+        # the *previous* window's order statistics instead of the current one.
+        idx = max(0, int(round(0.95 * (len(sorted_latencies) - 1))))
+        result = sorted_latencies[idx] if sorted_latencies else None
+        insort(sorted_latencies, latency)
+        out.append(result)
+
+    return out
+
+events = [(0, 100), (1, 200), (2, 300)]
+print(rolling_p95_latency(events, window_seconds=10))
+# Expected: [100, 200, 300] — returns [None, 100, 200]`
+  },
+  {
+    id: 'c11-duplicate-action-detection',
+    title: '66. Duplicate Action Detection (Sliding Window Keyed by User+Action)',
+    category: 'Streaming & Event Processing',
+    language: 'javascript',
+    code: `// 66. Duplicate Action Detection
+// Bug: Uses a strict "<" comparison instead of "<=", so a repeat action that
+// lands exactly windowSeconds after the previous one is silently missed.
+
+function duplicateActions(events, windowSeconds) {
+  const flagged = new Set();
+  const lastSeen = new Map(); // "user:action" -> most recent ts
+
+  for (const { userId, ts, action } of events) {
+    const key = \`\${userId}:\${action}\`;
+    const prev = lastSeen.get(key);
+
+    // Bug: should be "ts - prev <= windowSeconds" (closed window boundary).
+    if (prev !== undefined && ts - prev < windowSeconds) {
+      flagged.add(key);
+    }
+    lastSeen.set(key, ts);
+  }
+
+  return flagged;
+}
+
+console.log(duplicateActions([
+  { userId: 'u1', ts: 0, action: 'CLICK' },
+  { userId: 'u1', ts: 5, action: 'CLICK' },
+], 5));
+// Expected: Set{'u1:CLICK'} (exactly 5s apart, within a 5s window) — returns Set{}`
+  },
+
+  // ==========================================
+  // CATEGORY 12: SYSTEMS DESIGN & CONCURRENCY
+  // ==========================================
+  {
+    id: 'c12-banking-system',
+    title: '67. In-Memory Banking System (Timestamp-Ordered History)',
+    category: 'Systems Design & Concurrency',
+    language: 'go',
+    code: `// 67. In-Memory Banking System — Timestamp-Ordered Transaction History
+// Bug: GetTransactions uses a lower-bound search for BOTH ends of the range,
+// so any transaction sitting exactly at endTs is excluded from the result.
+
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+type Transaction struct {
+	Timestamp int
+	Kind      string
+	Amount    int
+}
+
+type BankingSystem struct {
+	timestamps map[string][]int
+	history    map[string][]Transaction
+}
+
+func NewBankingSystem() *BankingSystem {
+	return &BankingSystem{
+		timestamps: make(map[string][]int),
+		history:    make(map[string][]Transaction),
+	}
+}
+
+func (b *BankingSystem) record(account string, ts int, kind string, amount int) {
+	b.timestamps[account] = append(b.timestamps[account], ts)
+	b.history[account] = append(b.history[account], Transaction{ts, kind, amount})
+}
+
+// GetTransactions should return transactions with startTs <= ts <= endTs.
+func (b *BankingSystem) GetTransactions(account string, startTs, endTs int) []Transaction {
+	ts := b.timestamps[account]
+	lo := sort.SearchInts(ts, startTs)
+	// Bug: should search for the index PAST the last ts <= endTs (an upper
+	// bound). Reusing a lower-bound search here excludes ts == endTs.
+	hi := sort.SearchInts(ts, endTs)
+	return b.history[account][lo:hi]
+}
+
+func main() {
+	bank := NewBankingSystem()
+	bank.record("a1", 0, "deposit", 100)
+	bank.record("a1", 10, "deposit", 50)
+	bank.record("a1", 20, "withdrawal", 30)
+
+	txs := bank.GetTransactions("a1", 5, 20)
+	fmt.Println(len(txs)) // Expected: 2 (ts=10 and ts=20) — returns 1
+}`
+  },
+  {
+    id: 'c12-ttl-cache',
+    title: '68. TTL Cache / Key-Value Store with Expiry',
+    category: 'Systems Design & Concurrency',
+    language: 'rust',
+    code: `// 68. TTL Cache / Key-Value Store with Expiry
+// Bug: Expiry check uses "now > exp" instead of "now >= exp", so a key
+// survives one extra instant past the moment it should have expired.
+
+use std::collections::HashMap;
+
+struct TTLCache {
+    store: HashMap<String, String>,
+    expiry: HashMap<String, f64>,
+}
+
+impl TTLCache {
+    fn new() -> Self {
+        TTLCache { store: HashMap::new(), expiry: HashMap::new() }
+    }
+
+    fn set(&mut self, key: &str, value: &str, ttl_seconds: f64, now: f64) {
+        self.store.insert(key.to_string(), value.to_string());
+        self.expiry.insert(key.to_string(), now + ttl_seconds);
+    }
+
+    fn get(&mut self, key: &str, now: f64) -> Option<String> {
+        let exp = *self.expiry.get(key)?;
+        // Bug: should be \`now >= exp\` — the expiry instant itself is expired.
+        if now > exp {
+            self.store.remove(key);
+            self.expiry.remove(key);
+            return None;
+        }
+        self.store.get(key).cloned()
+    }
+}
+
+fn main() {
+    let mut cache = TTLCache::new();
+    cache.set("k1", "v1", 10.0, 0.0);
+    println!("{:?}", cache.get("k1", 10.0)); // Expected: None (expired exactly at ts=10) — returns Some("v1")
+}`
+  },
+  {
+    id: 'c12-file-dedup',
+    title: '69. File Deduplication via Content Hashing',
+    category: 'Systems Design & Concurrency',
+    language: 'python',
+    code: `# 69. File Deduplication via Content Hashing
+# Bug: Only hashes the FIRST chunk of each file instead of streaming through
+# all of it, so any two files sharing the same first chunk_size bytes are
+# wrongly reported as duplicates even if their later content differs.
+
+import hashlib
+import tempfile
+
+def hash_file_path(path, chunk_size=65536):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        # Bug: should loop with \`for chunk in iter(lambda: f.read(chunk_size), b"")\`
+        # to hash the ENTIRE file; this only ever hashes the first chunk.
+        chunk = f.read(chunk_size)
+        h.update(chunk)
+    return h.hexdigest()
+
+def find_duplicate_files_on_disk(paths, chunk_size=65536):
+    by_hash = {}
+    for path in paths:
+        by_hash.setdefault(hash_file_path(path, chunk_size), []).append(path)
+    return [group for group in by_hash.values() if len(group) > 1]
+
+# Two files share the same first 70,000 bytes but differ after that —
+# they should NOT be reported as duplicates.
+with tempfile.NamedTemporaryFile(delete=False) as f1, tempfile.NamedTemporaryFile(delete=False) as f2:
+    f1.write(b"A" * 70000 + b"file-one-tail")
+    f2.write(b"A" * 70000 + b"file-two-tail")
+    p1, p2 = f1.name, f2.name
+
+print(find_duplicate_files_on_disk([p1, p2], chunk_size=65536))
+# Expected: [] (tails differ) — returns [[p1, p2]] since only the shared first chunk is hashed`
+  },
+  {
+    id: 'c12-concurrent-crawler',
+    title: '70. Concurrent Web Crawler (Visited-Set Race)',
+    category: 'Systems Design & Concurrency',
+    language: 'go',
+    code: `// 70. Concurrent Web Crawler — Visited-Set Race
+// Bug: a URL is marked visited only AFTER fetch() returns, not before. Two
+// goroutines that see the same not-yet-visited URL at the same time can
+// both pass the check and both fetch it — a check-then-act race.
+
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func crawl(urls []string, fetch func(string), workers int) {
+	visited := make(map[string]bool)
+	var mu sync.Mutex
+	jobs := make(chan string, len(urls))
+	for _, u := range urls {
+		jobs <- u
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for url := range jobs {
+				mu.Lock()
+				already := visited[url]
+				mu.Unlock()
+				if already {
+					continue
+				}
+
+				fetch(url) // <-- race window: not marked visited yet
+
+				mu.Lock()
+				visited[url] = true // Bug: should be set BEFORE calling fetch()
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func main() {
+	var mu sync.Mutex
+	fetchCount := 0
+	fetch := func(url string) {
+		mu.Lock()
+		fetchCount++
+		mu.Unlock()
+	}
+	// Same URL queued twice — two workers can both slip past the check.
+	crawl([]string{"http://x.com/shared", "http://x.com/shared"}, fetch, 4)
+	fmt.Println(fetchCount) // Expected: 1 (deduped by visited set) — can print 2 under the race
+}`
+  },
+  {
+    id: 'c12-stack-trace-bottleneck',
+    title: '71. Stack-Trace Bottleneck Finder (Appearance Counts)',
+    category: 'Systems Design & Concurrency',
+    language: 'python',
+    code: `# 71. Stack-Trace Bottleneck Finder — Appearance Counts
+# Bug: Counts every frame occurrence in a sample instead of deduping per
+# sample first, so a recursive function appearing multiple times in a
+# SINGLE sample's stack gets over-counted relative to functions that only
+# ever appear once per sample.
+
+from collections import Counter
+
+def find_high_level_bottlenecks(samples, top_n=3):
+    appearance_counts = Counter()
+    for s in samples:
+        # Bug: should be \`appearance_counts.update(set(s["frames"]))\` so each
+        # sample contributes at most once per function name.
+        appearance_counts.update(s["frames"])
+    return appearance_counts.most_common(top_n)
+
+samples = [
+    {"frames": ["main", "recurse", "recurse", "recurse"]},  # 1 sample, recursive
+    {"frames": ["main", "handle_request"]},                  # 1 sample
+]
+print(find_high_level_bottlenecks(samples, top_n=1))
+# Expected: [('main', 2)] (appears in both samples) — returns [('recurse', 3)]`
+  },
+  {
+    id: 'c12-priority-delay-queue',
+    title: '72. Priority + Delay Message Queue (Two-Heap Design)',
+    category: 'Systems Design & Concurrency',
+    language: 'typescript',
+    code: `// 72. Priority + Delay Message Queue
+// Bug: Promotion check uses "<" instead of "<=", so a message whose
+// delayUntil exactly equals \`now\` is left pending one extra tick instead
+// of becoming visible immediately.
+
+type Pending = { delayUntil: number; seq: number; priority: number; message: string };
+type Visible = { priority: number; seq: number; message: string };
+
+class PriorityDelayQueue {
+  private pending: Pending[] = [];
+  private visible: Visible[] = [];
+  private seq = 0;
+
+  enqueue(message: string, priority: number, delayUntil: number): void {
+    this.pending.push({ delayUntil, seq: this.seq++, priority, message });
+    this.pending.sort((a, b) => a.delayUntil - b.delayUntil);
+  }
+
+  private promoteReady(now: number): void {
+    // Bug: should be \`this.pending[0].delayUntil <= now\`.
+    while (this.pending.length && this.pending[0].delayUntil < now) {
+      const p = this.pending.shift()!;
+      this.visible.push({ priority: p.priority, seq: p.seq, message: p.message });
+      this.visible.sort((a, b) => b.priority - a.priority || a.seq - b.seq);
+    }
+  }
+
+  dequeue(now: number): string | null {
+    this.promoteReady(now);
+    if (!this.visible.length) return null;
+    return this.visible.shift()!.message;
+  }
+}
+
+const q = new PriorityDelayQueue();
+q.enqueue('future', 10, 100);
+console.log(q.dequeue(100)); // Expected: 'future' (visible exactly at ts=100) — returns null`
+  },
+  {
+    id: 'c12-diagnostic-agent-retry',
+    title: '73. Diagnostic Agent — Retry Helper (State Machine with Retries)',
+    category: 'Systems Design & Concurrency',
+    language: 'javascript',
+    code: `// 73. Diagnostic Agent — Retry Helper
+// Bug: callWithRetry swallows the error after exhausting retries instead of
+// re-throwing it, so a permanently-failing tool silently returns \`undefined\`
+// instead of propagating the failure to the caller.
+
+class ToolError extends Error {}
+
+function callWithRetry(fn, maxRetries = 2) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return fn();
+    } catch (e) {
+      if (!(e instanceof ToolError)) throw e;
+      lastErr = e;
+    }
+  }
+  // Bug: should \`throw lastErr\` here instead of falling through.
+  return undefined;
+}
+
+const alwaysFails = () => { throw new ToolError('permanently down'); };
+console.log(callWithRetry(alwaysFails, 1));
+// Expected: throws ToolError('permanently down') after exhausting retries — returns undefined instead`
   }
 ];
 

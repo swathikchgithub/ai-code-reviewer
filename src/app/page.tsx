@@ -51,6 +51,8 @@ const CATEGORIES: ExamplePreset['category'][] = [
   'Linked Lists',
   'ML & System Design',
   'ML Engineering & LLM Infra',
+  'Streaming & Event Processing',
+  'Systems Design & Concurrency',
 ];
 
 export default function Home() {
